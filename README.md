@@ -67,15 +67,15 @@ git clone https://github.com/wenwubei5/dsh-whale-pond.git "D:/code/dsh-whale-pon
 
 ### 方式 C：下载 zip（离线 / 机器上没有 git）
 
-到 [Releases](https://github.com/wenwubei5/dsh-whale-pond/releases/latest) 下载 `dsh-whale-pond-1.0.0.zip`
-（55 KB，里面是 `package.json` + `lib/` + `cordis.patch.yml` + `README.md` + `LICENSE`），
+到 [Releases](https://github.com/wenwubei5/dsh-whale-pond/releases/latest) 下载 `dsh-whale-pond-1.1.0.zip`
+（约 50 KB，里面是 `package.json` + `lib/` + `cordis.patch.yml` + `README.md` + `LICENSE`），
 解压出 `dsh-whale-pond/`，再把上面的命令最后一段换成那个目录：
 
 ```bash
 ... plugin --profile desktop add "D:/下载/dsh-whale-pond"
 ```
 
-zip 里的 `lib/client.js` 就是生成好的产物（44,604 B），解压即可用，不需要构建。
+zip 里的 `lib/client.js` 就是生成好的产物（47,669 B），解压即可用，不需要构建。
 
 卸载：把上面的 `add` 换成 `remove`。
 
