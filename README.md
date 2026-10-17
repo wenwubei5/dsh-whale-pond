@@ -1,6 +1,6 @@
 # dsh-whale-pond 🐋
 
-> 一只在深海里慢慢游的鲸鱼，把它的自留地铺在 **DSH Desktop** 的 Web 界面背后。
+> 一只在深海里慢慢游的鲸鱼，把它的自留地铺在 **DSH** 的 Web 界面背后（桌面端窗口，或浏览器里打开的 `dsh web`）。
 > 纯视觉背景插件：**不拦鼠标、不抢键盘、不碰任何业务代码**。
 
 [![release](https://img.shields.io/github/v/release/wenwubei5/dsh-whale-pond?color=2b6cb0)](https://github.com/wenwubei5/dsh-whale-pond/releases/latest)
@@ -24,9 +24,10 @@ DSH（DeepSeek Harness）的 Web 界面背后本来是一块不透明背景。�
 
 ## 安装
 
-前提：**DSH Desktop**。插件用的是 DSH 的客户端插件机制（`window.__ModuleLoader__`），
-不是普通网页脚本，扔进浏览器里没用。仓库里已经带了生成好的 `lib/client.js`，
-**装的时候不需要 Node、不需要 Python、不需要构建**。
+前提：**页面必须是 DSH 自己的 Web 界面** —— 桌面端窗口，或者用 `dsh web` 起在浏览器里打开，两者都行
+（见下面「在浏览器里用」）。插件走的是 DSH 的客户端插件机制（`window.__ModuleLoader__`），所以不能当普通
+`<script>` 塞进别的网页；但它**不是 Electron 专属**，Chromium 内核的浏览器里实测正常。
+仓库里已经带了生成好的 `lib/client.js`，**装的时候不需要 Node、不需要 Python、不需要构建**。
 
 ### 方式 A：一条命令从 GitHub 直装（推荐）
 
@@ -76,6 +77,27 @@ git clone https://github.com/wenwubei5/dsh-whale-pond.git "D:/code/dsh-whale-pon
 zip 里的 `lib/client.js` 就是生成好的产物（44,604 B），解压即可用，不需要构建。
 
 卸载：把上面的 `add` 换成 `remove`。
+
+### 在浏览器里用（不打开桌面端窗口）
+
+插件跑在 DSH 的 Web 界面里，所以只要页面是 DSH 提供的，用浏览器打开效果完全一样。桌面端自带的 CLI 就能起
+一个纯 Web 实例：
+
+```bash
+DSH="/c/Program Files/DSH Desktop"          # 换成你自己的安装目录
+ELECTRON_RUN_AS_NODE=1 DSH_HOME="$HOME/.dsh" "$DSH/DSH Desktop.exe" \
+  --expose-internals "$DSH/resources/app/lib/desktop-cli.js" \
+  --profile web --port 4407 --no-open
+```
+
+它会打印一行 `http://127.0.0.1:4407/?token=…`，复制到 Chrome / Edge 里打开就有鲸鱼、光点和控制台。
+**插件要装进提供这个页面的那个 profile** —— 上面安装命令里的 `--profile desktop` 换成 `--profile web` 即可。
+
+两点要知道：
+
+- 桌面端窗口自己那个端口（默认 `43120`）是给 Electron 渲染进程用的：浏览器直接开会被 DSH 的鉴权挡住（401），
+  插件路由还带 `x-dsh-desktop-renderer` 头校验。这是宿主自己的限制，跟插件无关。
+- 实测用的是 Chromium 内核（Chrome / Edge）；Firefox / Safari 没测，理论上没问题（只用到 canvas 2D、CSS 变量和 localStorage）。
 
 ## 控制台
 
