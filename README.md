@@ -3,6 +3,10 @@
 > 一只在深海里慢慢游的鲸鱼，把它的自留地铺在 **DSH Desktop** 的 Web 界面背后。
 > 纯视觉背景插件：**不拦鼠标、不抢键盘、不碰任何业务代码**。
 
+[![release](https://img.shields.io/github/v/release/wenwubei5/dsh-whale-pond?color=2b6cb0)](https://github.com/wenwubei5/dsh-whale-pond/releases/latest)
+[![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![DSH Desktop](https://img.shields.io/badge/DSH%20Desktop-0.2.0--rc.2-1f2937)](https://github.com/wenwubei5/dsh-whale-pond)
+
 
 ## 它是什么
 
@@ -58,6 +62,18 @@ git clone https://github.com/wenwubei5/dsh-whale-pond.git "D:/code/dsh-whale-pon
 
 **新增插件包必须重启一次 DSH**（客户端入口要重新扫描）。之后再改代码就只要刷新页面（Ctrl+R）。
 从 GitHub 装的是**中性默认词**版本；你自己的词库存在 `localStorage`，不受影响。
+
+### 方式 C：下载 zip（离线 / 机器上没有 git）
+
+到 [Releases](https://github.com/wenwubei5/dsh-whale-pond/releases/latest) 下载 `dsh-whale-pond-1.0.0.zip`
+（55 KB，里面是 `package.json` + `lib/` + `cordis.patch.yml` + `README.md` + `LICENSE`），
+解压出 `dsh-whale-pond/`，再把上面的命令最后一段换成那个目录：
+
+```bash
+... plugin --profile desktop add "D:/下载/dsh-whale-pond"
+```
+
+zip 里的 `lib/client.js` 就是生成好的产物（44,604 B），解压即可用，不需要构建。
 
 卸载：把上面的 `add` 换成 `remove`。
 
