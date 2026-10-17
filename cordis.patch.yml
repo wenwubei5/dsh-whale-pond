@@ -1,0 +1,6 @@
+# dsh-whale-pond — 小鲸鱼壁纸插件的 profile patch 层。
+# 安装：dsh plugin --profile web add <本目录绝对路径>
+# 这一行把插件的 client entry 插进 web 插件名册；新增包需要重启一次 dsh。
+- insert:
+    - id: ui-whale-pond
+      name: 'dsh-whale-pond'

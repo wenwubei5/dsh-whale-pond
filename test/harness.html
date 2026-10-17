@@ -1,0 +1,810 @@
+<!doctype html>
+<html><head><meta charset='utf-8'><title>pond-harness</title>
+<style>
+  html,body{margin:0;height:100%;background:transparent}
+  body{isolation:isolate;--dsw-alias-bg-base:#05070d;--dsw-alias-bg-layer-1:#0a0e18;--dsw-alias-bg-layer-2:#0d1322;--dsw-alias-bg-layer-3:#121a2c;--dsw-alias-bg-overlay:#141c30;--dsw-alias-bg-module-platform:#0a101d;--dsw-alias-bg-multi-select:#11182a;--dsw-specific-sidebar-fill:#060a11}
+  #sidebarCol{position:fixed;left:0;top:0;bottom:0;width:200px;background:rgba(6,10,17,0.45)}
+</style></head>
+<body>
+<div id='sidebarCol' class='App_sidebarCol__x1'></div>
+<pre id='out'>PENDING</pre>
+<script>
+  window.__log = [];
+  window.__ModuleLoader__ = { load: function (m) { window.__mod = m; } };
+  window.__rafq = [];
+  window.requestAnimationFrame = function (cb) { window.__rafq.push(cb); return window.__rafq.length; };
+  window.cancelAnimationFrame = function () {};
+  window.__pump = function (n, step) {
+    for (var i = 0; i < n; i++) {
+      var q = window.__rafq; window.__rafq = [];
+      window.__wake = (window.__wake || 0);
+      if (!q.length) break;
+      window.__t = (window.__t || 1000) + (step || 40);
+      window.__arcs = 0;
+      for (var k = 0; k < q.length; k++) { window.__wake++; try { q[k](window.__t); } catch (e) { window.__log.push('FRAME_ERR ' + e); } }
+      window.__arcHist.push(window.__arcs);
+    }
+  };
+  window.__arcs = 0; window.__arcHist = [];
+  window.__rec = false; window.__pts = [];
+  var arc = CanvasRenderingContext2D.prototype.arc;
+  CanvasRenderingContext2D.prototype.arc = function (x, y, r) {
+    window.__arcs++;
+    if (window.__rec) window.__pts.push([x, y, r]);
+    return arc.apply(this, arguments);
+  };
+  var tr = CanvasRenderingContext2D.prototype.translate;
+  window.__trans = [];
+  CanvasRenderingContext2D.prototype.translate = function (x, y) { if (window.__rec) window.__trans.push([x, y, window.__wake]); return tr.apply(this, arguments); };
+  window.__ops = {};
+  window.__pumpTimed = function (n, step) { var t0 = performance.now(); window.__pump(n, step); return performance.now() - t0; };
+  ['fill','stroke','beginPath','fillRect','drawImage','createLinearGradient','createRadialGradient'].forEach(function (nm) {
+    window.__ops[nm] = 0;
+    var f = CanvasRenderingContext2D.prototype[nm];
+    CanvasRenderingContext2D.prototype[nm] = function () { window.__ops[nm]++; return f.apply(this, arguments); };
+  });
+  var ft = CanvasRenderingContext2D.prototype.fillText;
+  window.__texts = [];
+  CanvasRenderingContext2D.prototype.fillText = function (s) { window.__texts.push(String(s)); return ft.apply(this, arguments); };
+  // 夹具专用：把插件注册的 setInterval 回调记下来。插件里「吃食补货」与「每 12s 造一个带词光点」
+  // 两个定时器都在 document.hidden 时 early-return，而无头页面 hidden 常为 true —— 手动跑它们最稳。
+  var _si = window.setInterval;
+  window.__ivals = [];
+  window.setInterval = function (fn, ms) { if (typeof fn === 'function') window.__ivals.push({ fn: fn, ms: ms }); return _si.apply(this, arguments); };
+</script>
+<script src='../lib/client.js'></script>
+<script>
+  (function () {
+    var out = {};
+    out.loaded = !!window.__mod;
+    try { var mod = window.__mod.factory(function () { return {}; }); out.isPlugin = !!mod.isPlugin; window.__cleanup1 = mod.apply(function () { return {}; }); out.cleanupType = typeof window.__cleanup1; } catch (e) { out.applyErr = String(e); }
+    function framePts(){ window.__rec = true; window.__pts = []; window.__pump(1, 40); window.__rec = false; return window.__pts.slice(); }
+    function meanD(P, tx, ty){ var s = 0; for (var i = 0; i < P.length; i++){ var dx = P[i][0]-tx, dy = P[i][1]-ty; s += Math.sqrt(dx*dx+dy*dy); } return P.length ? +(s/P.length).toFixed(1) : -1; }
+    var RS = [60, 120, 200, 300, 450, 700];
+      function hist(P, tx, ty, rs){ var o = []; for (var j = 0; j < rs.length; j++) o.push(near(P, tx, ty, rs[j])); return o; }
+      function near(P, tx, ty, r){ var n = 0; for (var i = 0; i < P.length; i++){ var dx = P[i][0]-tx, dy = P[i][1]-ty; if (dx*dx+dy*dy < r*r) n++; } return n; }
+    function dedupe(P){ var m = {}, o = []; for (var i = 0; i < P.length; i++){ var k = Math.round(P[i][0]) + ',' + Math.round(P[i][1]); if (!m[k]) { m[k] = 1; o.push(P[i]); } } return o; }
+    function step(P0, Q0){ var P = dedupe(P0), Q = dedupe(Q0), s = 0, c = 0; for (var i = 0; i < P.length; i += 2){ var best = 1e9; for (var j = 0; j < Q.length; j++){ var dx = P[i][0]-Q[j][0], dy = P[i][1]-Q[j][1]; var d = dx*dx+dy*dy; if (d < best) best = d; } s += Math.sqrt(best); c++; } return c ? +(s/c).toFixed(2) : -1; }
+    function move(x, y){ window.dispatchEvent(new MouseEvent('mousemove', { clientX: x, clientY: y, bubbles: false })); }
+    function ringArcs(P){ var n = 0; for (var i = 0; i < P.length; i++){ var r = P[i][2]; if (r > 78 && r < 100) n++; else if (r > 158 && r < 190) n++; } return n; }
+    setTimeout(function () {
+      window.__pump(4, 40);
+      var cv = document.getElementById('whale-pond-canvas');
+      out.canvas = !!cv;
+      out.bodyBg = getComputedStyle(document.body).backgroundColor;
+      out.base = getComputedStyle(document.body).getPropertyValue('--dsw-alias-bg-base').trim();
+      var W = window.innerWidth, H = window.innerHeight;
+      var TX = Math.round(W*0.5), TY = Math.round(H*0.40);
+      var A = framePts(), B = framePts();
+      out.moteCount = A.length;
+      out.driftPerFrame = step(A, B);            // 无鼠标时的自然漂移速度 px/帧
+      out.meanDBefore = meanD(A, TX, TY);
+      out.nearBefore = near(A, TX, TY, 200);
+      out.histBefore = hist(A, TX, TY, RS);
+      // 用鼠标把光点从画面左下角牵到 (TX,TY)
+      var x0 = Math.round(W*0.12), y0 = Math.round(H*0.85), STEPS = 26;
+      for (var k = 1; k <= STEPS; k++){
+        move(Math.round(x0+(TX-x0)*k/STEPS), Math.round(y0+(TY-y0)*k/STEPS));
+        if (k % 2 === 0) window.__pump(1, 40);
+      }
+      window.__pump(95, 40);
+      var C = framePts();
+      out.meanDAfter = meanD(C, TX, TY);
+      out.nearAfter = near(C, TX, TY, 200);
+      out.histAfter = hist(C, TX, TY, RS);
+      out.ringArcs = ringArcs(C);
+      out.arcPerFrame = window.__arcHist.slice(-2);
+      out.texts = window.__texts.slice(-6);
+      // ---- 右下角发射区（用户 m02074） ----
+      function expectWhale(k){ var T = 40 * (k - 1);
+        return [ W*0.5 + Math.sin(T*0.00013)*W*0.35 + Math.sin(T*0.00047)*W*0.07,
+                 H*0.44 + Math.sin(T*0.00021 + 1.7)*H*0.17 + Math.sin(T*0.00059)*H*0.045 ]; }
+      var ZX = W - 132, ZY = H - 132, ZR = 170, ZM = ZR + 58;
+      function zoneMotes(P){ var n = 0; for (var i = 0; i < P.length; i++){ var r = P[i][2]; if (r < 1.4 || r > 2.2) continue;
+        var dx = P[i][0]-ZX, dy = P[i][1]-ZY; if (dx*dx + dy*dy < ZR*ZR) n++; } return n; }
+      function padArcs(P){ var n = 0; for (var i = 0; i < P.length; i++){ var r = P[i][2]; if (r > 165 && r < 175) n++; } return n; }
+      out.zoneMotesBefore = zoneMotes(framePts());
+      out.padArcsIdle = padArcs(C);
+      move(ZX, ZY);
+      window.__pump(60, 40);
+      out.zoneMotesAfter = zoneMotes(framePts());
+      out.padArcsArmed = padArcs(framePts());
+      function motePts(){ var P0 = framePts(), o = []; for (var i = 0; i < P0.length; i++){ var r = P0[i][2]; if (r >= 1.4 && r <= 2.2) o.push([P0[i][0], P0[i][1]]); } return o; }
+      // 1) 快速光点群体的平均每帧位移曲线：累加即「平均一颗被弹的光点飞了多远」（绕屏不变）
+      function fastProfile(nf){
+        var prev = motePts(), sum = 0, frames = 0, first = [];
+        for (var f = 0; f < nf; f++){
+          var cur = motePts(), s = 0, c = 0;
+          for (var i = 0; i < cur.length; i++){
+            var best = 1e18;
+            for (var j = 0; j < prev.length; j++){
+              var ax = cur[i][0]-prev[j][0]; if (ax > 20 || ax < -20) continue;
+              var ay = cur[i][1]-prev[j][1]; if (ay > 20 || ay < -20) continue;
+              var dd2 = ax*ax + ay*ay; if (dd2 < best) best = dd2;
+            }
+            if (best > 400 || best <= 25) continue;   // 只看位移 5~20px/帧 的（普通漂移 ~1-4）
+            s += Math.sqrt(best); c++;
+          }
+          if (c > 0){ sum += s / c; frames++; }
+          if (f < 8) first.push(c);
+          prev = cur;
+        }
+        return { sum: +sum.toFixed(0), frames: frames, first: first };
+      }
+      var fpAfter = fastProfile(190);
+      out.jetMeanTravel = fpAfter.sum;
+      out.jetMeanTravelDiameters = +(fpAfter.sum / 340).toFixed(2);
+      out.jetFramesWithFast = fpAfter.frames;
+      out.jetFastFirst8 = fpAfter.first;
+      // 2) 喷流分桶：位移 10~20px/帧 的光点出现在离发射台几倍直径处
+      var prev = motePts(), jetCount = 0, jetMaxR = 0, jetSumR = 0;
+      var bins = [0, 0, 0, 0, 0];
+      for (var f = 0; f < 110; f++){
+        var cur = motePts();
+        for (var i = 0; i < cur.length; i++){
+          var best = 1e18;
+          for (var j = 0; j < prev.length; j++){
+            var ax = cur[i][0]-prev[j][0]; if (ax > 20 || ax < -20) continue;
+            var ay = cur[i][1]-prev[j][1]; if (ay > 20 || ay < -20) continue;
+            var dd2 = ax*ax + ay*ay; if (dd2 < best) best = dd2;
+          }
+          if (best > 400 || best <= 100) continue;
+          var rr = Math.sqrt((cur[i][0]-ZX)*(cur[i][0]-ZX) + (cur[i][1]-ZY)*(cur[i][1]-ZY));
+          jetCount++; jetSumR += rr; if (rr > jetMaxR) jetMaxR = rr;
+          var bi = rr < 340 ? 0 : (rr < 680 ? 1 : (rr < 1020 ? 2 : (rr < 1360 ? 3 : 4)));
+          bins[bi]++;
+        }
+        prev = cur;
+      }
+      out.jetCount = jetCount;
+      out.jetBins = bins;
+      out.jetMaxR = +jetMaxR.toFixed(0);
+      out.jetMeanR = jetCount ? +(jetSumR/jetCount).toFixed(0) : -1;
+      out.zoneDiameter = ZR * 2;
+      out.arcPerFrameZone = window.__arcHist.slice(-2);
+      // 鲸鱼：解析路径 vs 实画位置（translate 记录），等它游进发射区
+      var enter = -1;
+      for (var k = window.__wake + 1; k <= window.__wake + 3000; k++){
+        var e0 = expectWhale(k), dx0 = e0[0]-ZX, dy0 = e0[1]-ZY;
+        if (dx0*dx0 + dy0*dy0 < ZM*ZM) { enter = k; break; }
+      }
+      out.whaleEnterFrame = enter < 0 ? -1 : enter - window.__wake;
+      out.whaleEnterInside = enter < 0 ? false : true;
+      var maxOff = 0, maxOffIn = 0, inFrames = 0, outFrames = 0, maxOut = 0, maxOutIn = 0;
+      var span = enter < 0 ? 0 : 260;
+      if (enter > 0) window.__pump(enter - window.__wake, 40);
+      window.__rec = true;
+      for (var f = 0; f < span; f++){
+        window.__trans = [];
+        window.__pump(1, 40);
+        var t = window.__trans[0];   // 帧内第一个 translate 才是 drawWhale 的 whale.x/y（第二个是尾巴的 translate(-64,-1)）
+        if (!t) continue;
+        var e = expectWhale(t[2]);
+        var off = Math.sqrt((t[0]-e[0])*(t[0]-e[0]) + (t[1]-e[1])*(t[1]-e[1]));
+        var ox = t[0]-ZX, oy = t[1]-ZY, od = Math.sqrt(ox*ox + oy*oy);
+        var ix = e[0]-ZX, iy = e[1]-ZY, id = Math.sqrt(ix*ix + iy*iy);
+        if (off > maxOff) maxOff = off;
+        if (od > maxOut) maxOut = od;
+        if (id < ZM) { inFrames++; if (off > maxOffIn) maxOffIn = off; if (od > maxOutIn) maxOutIn = od; }
+        else { outFrames++; if (od > maxOut) maxOut = od; }
+      }
+      window.__rec = false;
+      out.whaleFramesInZone = inFrames;
+      out.whaleFramesOutZone = outFrames;
+      out.whaleMaxOffset = +maxOff.toFixed(1);
+      out.whaleMaxOffsetWhileInZone = +maxOffIn.toFixed(1);
+      out.whaleRenderedMaxDistFromPad = +maxOut.toFixed(1);
+      out.whaleRenderedMaxDistWhileInZone = +maxOutIn.toFixed(1);
+      out.zoneMotesEnd = zoneMotes(framePts());
+      out.padArcsEnd = padArcs(framePts());
+      try {
+      // ---- 控制台（2026-10-17 用户要求：把改过的参数做成选项） ----
+      var gear = document.getElementById('whale-pond-gear');
+      var panel = document.getElementById('whale-pond-panel');
+      out.gearFound = !!gear;
+      out.panelFound = !!panel;
+      out.panelDisplayInit = panel ? getComputedStyle(panel).display : 'n/a';
+      if (gear) gear.click();
+      out.panelDisplayOpen = panel ? getComputedStyle(panel).display : 'n/a';
+      var rs = panel ? panel.querySelectorAll('input[type=range]') : [];
+      var cbs = panel ? panel.querySelectorAll('input[type=checkbox]') : [];
+      out.sliderCount = rs.length;
+      out.checkboxCount = cbs.length;
+      out.sliderNames = [];
+      for (var i = 0; i < rs.length; i++) out.sliderNames.push(rs[i].closest ? (rs[i].parentNode.firstChild.textContent) : '');
+      out.checkedInit = [];
+      for (var i = 0; i < cbs.length; i++) out.checkedInit.push(cbs[i].checked);
+      out.rowsText = panel ? panel.textContent.replace(/\s+/g, ' ').slice(0, 120) : '';
+      // 1) 光点数量滑杆（下标 2）：150 → 每帧 arc 明显下降
+      out.arcPerFrameBeforeCount = window.__arcHist.slice(-2);
+      if (rs.length >= 9){ rs[2].value = 150; rs[2].dispatchEvent(new Event('input')); }
+      window.__pump(70, 40);
+      out.arcPerFrameAfterCount = window.__arcHist.slice(-2);
+      out.countLabelAfterSet = rs.length >= 9 ? rs[2].parentNode.children[0].children[1].textContent : '';
+      try { out.savedToLocalStorage = (localStorage.getItem('whale-pond-settings-v1') || '').slice(0, 90); } catch(e){ out.savedToLocalStorage = 'LS_ERR ' + e; }
+      // 2) 关掉发射台（复选框下标 4）后不该再画发射台圆
+      out.padArcsBeforeToggle = padArcs(framePts());
+      if (cbs.length >= 5 && !cbs[4].checked) cbs[4].click();
+      if (cbs.length >= 5){ cbs[4].checked = false; cbs[4].dispatchEvent(new Event('change')); }
+      window.__pump(4, 40);
+      out.padArcsAfterToggle = padArcs(framePts());
+      if (cbs.length >= 5){ cbs[4].checked = true; cbs[4].dispatchEvent(new Event('change')); }
+      // 3) 恢复默认按钮 + Esc 关闭
+      // 2b) 画布亮度与面板不透明度（token）是否真的落到 DOM
+      var cvEl = document.getElementById('whale-pond-canvas');
+      if (rs.length >= 9){ rs[1].value = 2.0; rs[1].dispatchEvent(new Event('input')); }
+      out.canvasFilterAfterBrightness = cvEl ? cvEl.style.filter : 'n/a';
+      if (rs.length >= 9){ rs[0].value = 0.5; rs[0].dispatchEvent(new Event('input')); }
+      out.bodyTokenAfterGlass = document.body.style.getPropertyValue('--dsw-alias-bg-base');
+      if (rs.length >= 9){ rs[1].value = 1.6; rs[1].dispatchEvent(new Event('input')); rs[0].value = 0.34; rs[0].dispatchEvent(new Event('input')); }
+      var btns = panel ? panel.querySelectorAll('.wp-btn') : [];
+      out.buttonCount = btns.length;
+      if (btns.length >= 1) btns[0].click();
+      window.__pump(4, 40);
+      out.countLabelAfterReset = rs.length >= 9 ? rs[2].parentNode.children[0].children[1].textContent : '';
+      try { out.savedAfterReset = (localStorage.getItem('whale-pond-settings-v1') || '').slice(0, 90); } catch(e){ out.savedAfterReset = 'LS_ERR ' + e; }
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      out.panelDisplayAfterEsc = panel ? getComputedStyle(panel).display : 'n/a';
+      if (gear) gear.click();   // 再打开，留一张带面板的截图给截图流程用
+      // ---- 上限探针（数量 ×3 / 速度 ×3 / 弹射力度 ×5）----
+      function setRange(i, v){ if (rs.length >= 9){ rs[i].value = v; rs[i].dispatchEvent(new Event('input')); } }
+      out.ctlRanges = [];
+      for (var q = 0; q < rs.length; q++) out.ctlRanges.push(rs[q].min + '~' + rs[q].max);
+      function driftNow(){ var A = framePts(), B = framePts(); return +step(A, B).toFixed(2); }
+      // 每帧取「最近邻位移」，按 8/20/40/80/150 px 分桶累加 + 记录最大（比单看最大值稳，噪声只落在低桶）
+      function stepHist(nf){
+        var prev = motePts(), h = [0,0,0,0,0], mx = 0;
+        for (var f = 0; f < nf; f++){
+          var cur = motePts();
+          for (var i = 0; i < cur.length; i++){
+            var best = 1e18;
+            for (var j = 0; j < prev.length; j++){
+              var ax = cur[i][0]-prev[j][0]; if (ax > 400 || ax < -400) continue;
+              var ay = cur[i][1]-prev[j][1]; if (ay > 400 || ay < -400) continue;
+              var dd = ax*ax + ay*ay; if (dd < best) best = dd;
+            }
+            if (best < 1e17){ var sd = Math.sqrt(best); if (sd > mx) mx = sd;
+              if (sd > 8) h[0]++; if (sd > 20) h[1]++; if (sd > 40) h[2]++; if (sd > 80) h[3]++; if (sd > 150) h[4]++; }
+          }
+          prev = cur;
+        }
+        return [h, +mx.toFixed(1)];
+      }
+      move(ZX, ZY);
+      setRange(3, 1.0); setRange(2, 400); setRange(8, 1.0); window.__pump(30, 40);
+      out.driftSpeed1 = driftNow();
+      var h1 = stepHist(40); out.jetHistPower1 = h1[0]; out.jetMaxPower1 = h1[1];
+      move(ZX, ZY); setRange(8, 4.0); window.__pump(20, 40);
+      var h4 = stepHist(40); out.jetHistPower4 = h4[0]; out.jetMaxPower4 = h4[1];
+      move(ZX, ZY);
+      setRange(3, 9.0); window.__pump(60, 40);
+      out.driftSpeed9 = driftNow();
+      var hs = stepHist(15); out.driftHistSpeed9 = hs[0]; out.driftMaxSpeed9 = hs[1];
+      move(ZX, ZY); setRange(8, 40); window.__pump(20, 40);
+      var h40 = stepHist(40); out.jetHistPower40 = h40[0]; out.jetMaxPower40 = h40[1];
+      setRange(2, 2100); window.__pump(150, 40);
+      out.arcPerFrameCount2100 = (window.__arcHist || []).slice(-3);
+      setRange(2, 400); setRange(3, 1.0); setRange(8, 4.0); window.__pump(40, 40);
+      out.arcPerFrameRestored = (window.__arcHist || []).slice(-2);
+      try { out.savedFinal = (localStorage.getItem('whale-pond-settings-v1') || '').slice(0, 60); } catch(e){ out.savedFinal = 'LS_ERR'; }
+      window.__pump(2, 40);
+      } catch(e){ out.panelErr = 'CAUGHT ' + (e && e.message ? e.message : e); }
+      // ================= fuzz / bug hunt（用户 m02397「你自己再测试一下找找bug」） =================
+      try {
+        var F = {}; out.fuzz = F;
+        // 0) 哨兵：任何非有限坐标/半径都算 bug
+        F.badArcs = 0; F.badTrans = 0;
+        var _arcF = CanvasRenderingContext2D.prototype.arc;
+        CanvasRenderingContext2D.prototype.arc = function(x, y, r){ if(!(isFinite(x) && isFinite(y) && isFinite(r))) F.badArcs++; return _arcF.apply(this, arguments); };
+        var _trF = CanvasRenderingContext2D.prototype.translate;
+        CanvasRenderingContext2D.prototype.translate = function(x, y){ if(!(isFinite(x) && isFinite(y))) F.badTrans++; return _trF.apply(this, arguments); };
+        function arcs(){ var h = window.__arcHist || []; return h.length ? h[h.length - 1] : -1; }
+        function mark(){ F.err0 = window.__log.length; }
+        function newErrs(){ return window.__log.slice(F.err0); }
+        // 1) 每个控件推到 min / max（滑杆）与 false / true（复选框）
+        F.perCtl = [];
+        function probe(tag, i, v, isCb){
+          mark();
+          if (isCb){ cbs[i].checked = v; cbs[i].dispatchEvent(new Event('change')); }
+          else { rs[i].value = v; rs[i].dispatchEvent(new Event('input')); }
+          window.__pump(6, 40);
+          F.perCtl.push([tag, arcs(), (newErrs()[0] || '') + '', F.badArcs]);
+        }
+        var SNAME = ['glass','brightness','count','speed','ar','ak','padR','padM','padPower'];
+        var CNAME = ['attract','ring','popToken','popWord','pad'];
+        for (var i = 0; i < rs.length && i < 9; i++){
+          probe('s:' + SNAME[i] + '=min', i, parseFloat(rs[i].min), false);
+          probe('s:' + SNAME[i] + '=max', i, parseFloat(rs[i].max), false);
+        }
+        for (var i = 0; i < cbs.length && i < 5; i++){
+          probe('c:' + CNAME[i] + '=off', i, false, true);
+          probe('c:' + CNAME[i] + '=on', i, true, true);
+        }
+        F.errAfterSweep = newErrs();
+        // 2) 极端组合 + 性能
+        setRange(2, 2100); setRange(3, 9.0); setRange(8, 40); move(ZX, ZY); window.__pump(20, 40);
+        mark();
+        var t0 = Date.now(); window.__pump(60, 40); F.heavy60ms = Date.now() - t0;
+        F.heavyArcs = arcs(); F.heavyErrs = newErrs();
+        // 3) Esc 是否穿透给宿主（宿主用 Esc 取消生成 = 真事故）
+        window.__hostEsc = 0;
+        window.addEventListener('keydown', function(){ window.__hostEsc++; });
+        document.getElementById('whale-pond-gear').click();   // 确保面板是开的
+        F.panelOpenBeforeEsc = getComputedStyle(document.getElementById('whale-pond-panel')).display;
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        F.panelAfterEsc = getComputedStyle(document.getElementById('whale-pond-panel')).display;
+        F.hostSawEscPanelOpen = window.__hostEsc;
+        window.__hostEsc = 0;
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        F.hostSawEscPanelClosed = window.__hostEsc;
+        // 4) 清理 / HMR：stop() 之后 DOM 应该回到干净状态
+        function counts(){
+          var q = function(id){ return document.querySelectorAll('#' + id).length; };
+          var h = document.querySelectorAll('canvas#whale-pond-canvas').length;
+          return { gear: q('whale-pond-gear'), panel: q('whale-pond-panel'), style: document.querySelectorAll('#whale-pond-style').length, canvas: h };
+        }
+        F.domBefore = counts();
+        F.cleanupType = typeof window.__cleanup1;
+        if (typeof window.__cleanup1 === 'function') window.__cleanup1();
+        window.__pump(4, 40);
+        F.domAfterCleanup = counts();
+        F.bodyBgAfterCleanup = getComputedStyle(document.body).backgroundColor;
+        F.tokenAfterCleanup = document.body.style.getPropertyValue('--dsw-alias-bg-base');
+        F.arcsAfterCleanup = arcs();
+        // 5) 重新 apply（模拟 HMR 重载）后应恢复成一份干净的 DOM
+        function fresh(){ var m = window.__mod.factory(function(){ return {}; }); return m.apply(function(){ return {}; }); }
+        window.__cleanup2 = fresh();
+        window.__pump(8, 40);
+        F.domAfterReapply = counts();
+        F.arcsAfterReapply = arcs();
+        // 6) localStorage 篡改：越界值必须被夹住（面板显示值与引擎实际值不能分家）
+        try {
+          localStorage.setItem('whale-pond-settings-v1', JSON.stringify({ count: 5000, speed: -3, ar: 99999, brightness: 0, glass: 2, padPower: 1e6, attract: 'yes', ring: 1 }));
+        } catch(e){ F.lsErr = String(e); }
+        if (typeof window.__cleanup2 === 'function') window.__cleanup2();
+        window.__cleanup3 = fresh();
+        window.__pump(12, 40);
+        F.tamperArcs = arcs();
+        var p3 = document.getElementById('whale-pond-panel');
+        var rs3 = p3 ? p3.querySelectorAll('input[type=range]') : [];
+        F.tamperSliderCount = rs3.length >= 9 ? rs3[2].value : 'n/a';
+        F.tamperFilter = document.getElementById('whale-pond-canvas').style.filter;
+        F.tamperToken = document.body.style.getPropertyValue('--dsw-alias-bg-base');
+        F.tamperErrs = window.__log.slice(-2);
+        // 7) 收尾：清掉篡改值 + 恢复默认设置，页面留给截图
+        try { localStorage.removeItem('whale-pond-settings-v1'); } catch(e){}
+        if (typeof window.__cleanup3 === 'function') window.__cleanup3();
+        window.__cleanup4 = fresh();
+        window.__pump(20, 40);
+        F.finalArcs = arcs(); F.finalDom = counts(); F.finalErrs = window.__log.slice(-2);
+        F.badArcsTotal = F.badArcs; F.badTransTotal = F.badTrans;
+      } catch(e){ out.fuzzErr = 'CAUGHT ' + (e && e.stack ? e.stack : e); }
+      // ================= fuzz 第二批：Esc 穿透修正复测 / 持久化往返 =================
+      try {
+        var G = {}; out.fuzz2 = G;
+        var gearEl2 = document.getElementById('whale-pond-gear');
+        var panelEl2 = document.getElementById('whale-pond-panel');
+        function panelDisp(){ return getComputedStyle(panelEl2).display; }
+        for (var k = 0; k < 3 && panelDisp() !== 'block'; k++) gearEl2.click();
+        G.panelBeforeEsc = panelDisp();
+        window.__hostEsc2 = 0;
+        window.addEventListener('keydown', function(){ window.__hostEsc2++; });
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        G.panelAfterEsc = panelDisp();
+        G.hostSawEscWhenPanelOpen = window.__hostEsc2;
+        window.__hostEsc2 = 0;
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        G.hostSawEscWhenPanelClosed = window.__hostEsc2;
+        // 持久化往返：改值 → 重新 apply → 面板应显示同样的值
+        for (var k = 0; k < 3 && panelDisp() !== 'block'; k++) gearEl2.click();
+        var rs4 = panelEl2.querySelectorAll('input[type=range]');
+        rs4[2].value = 700; rs4[2].dispatchEvent(new Event('input'));
+        rs4[3].value = 3.0; rs4[3].dispatchEvent(new Event('input'));
+        rs4[8].value = 12;  rs4[8].dispatchEvent(new Event('input'));
+        window.__pump(30, 40);
+        G.arcsAt700 = arcs();
+        if (typeof window.__cleanup4 === 'function') window.__cleanup4();
+        window.__cleanup5 = fresh();
+        window.__pump(30, 40);
+        var p5 = document.getElementById('whale-pond-panel');
+        var rs5 = p5.querySelectorAll('input[type=range]');
+        G.roundTripCount = rs5[2].value; G.roundTripSpeed = rs5[3].value; G.roundTripPower = rs5[8].value;
+        G.arcsAfterRoundTrip = arcs();
+        G.roundTripSaved = (localStorage.getItem('whale-pond-settings-v1') || '').slice(0, 80);
+        try { localStorage.removeItem('whale-pond-settings-v1'); } catch(e){}
+        if (typeof window.__cleanup5 === 'function') window.__cleanup5();
+        window.__cleanup6 = fresh(); window.__pump(15, 40);
+        G.finalArcs = arcs();
+      } catch(e){ out.fuzz2Err = 'CAUGHT ' + (e && e.stack ? e.stack : e); }
+      out.frameErrors = window.__log.slice(0, 4);
+      function emit(){ document.getElementById('out').textContent = 'RESULT ' + JSON.stringify(out); }
+      setTimeout(emit, 25000);  // 兜底：fuzz3 的链子断了也必须出结果
+      // ================= fuzz 第三批：控制台「词库」框 ================= 
+      var BUILTIN = ['潮汐','盐','月光','鲸落','暗流','礁石','海雾','星光','潮声','深蓝'];
+      var NEWW = ['阿尔法','贝塔','伽马','德尔塔'];
+      try {
+        var W = {}; out.fuzz3 = W;
+
+        var gearEl3 = document.getElementById('whale-pond-gear');
+        var pnl3 = document.getElementById('whale-pond-panel');
+        function disp3(){ return getComputedStyle(pnl3).display; }
+        for (var k3 = 0; k3 < 3 && disp3() !== 'block'; k3++) gearEl3.click();
+        W.panelOpen = disp3();
+        var ta3 = pnl3.querySelector('textarea.wp-words');
+        W.taFound = !!ta3;
+        function cntOf(t){ var ch = t.parentElement.children; return ch[ch.length - 1].textContent; }
+        W.initText = ta3 ? ta3.value.split('\n').join('|') : '';
+        W.initLabel = ta3 ? cntOf(ta3) : '';
+        W.initRows = ta3 ? ta3.rows : -1;
+        // 编辑词库：一行一个 + 逗号 + 顿号混用
+        ta3.value = '阿尔法\n贝塔，伽马、德尔塔';
+        ta3.dispatchEvent(new Event('input'));
+        W.lsImmediate = (localStorage.getItem('whale-pond-words-v1') || '').indexOf('阿尔法') >= 0;   // 改一下存一下：不等防抖
+        W.lsBeforeDebounce = W.lsImmediate;
+        // 落盘（无防抖）+ applyWords 生效；词库存在 whale-pond-words-v1
+        setTimeout(function(){
+          try {
+            W.lsAfterDebounce = JSON.parse(localStorage.getItem('whale-pond-words-v1') || 'null');
+            W.labelAfter = cntOf(ta3);
+            W.textAfter = ta3.value.split('\n').join('|');
+            // 海里到底画的是哪套词：把 Math.random 钉住 → spawnWord 永远取词表第 0 个。
+            // 带词光点只由两个 setInterval 造出来（吃食补货 / 每 12s 一个），两者都在
+            // document.hidden 时 early-return —— 夹具里直接手动把它们跑一遍。
+            var rnd0 = Math.random; Math.random = function(){ return 0.05; };
+            var t0 = window.__texts.length;
+            var ivs = window.__ivals || [];
+            W.ivCount = ivs.length;
+            W.ivMs = ivs.map(function(o){ return o.ms; });
+            for (var q = 0; q < ivs.length; q++) { try { ivs[q].fn(); } catch(e){ W.ivErr = String(e); } }
+                window.__pump(30, 40);
+                var drawn = window.__texts.slice(t0).filter(function(s){ return s && s !== '-1 token'; });
+                W.drawnTotal = drawn.length;
+                W.drawnSample = drawn.slice(0, 5);
+                W.drawnFromCustom = drawn.filter(function(s){ return NEWW.indexOf(s) >= 0; }).length;
+                W.drawnFromBuiltin = drawn.filter(function(s){ return BUILTIN.indexOf(s) >= 0; }).length;
+                W.drawnOther = drawn.filter(function(s){ return NEWW.indexOf(s) < 0 && BUILTIN.indexOf(s) < 0; }).slice(0, 4);
+                W.drawNote = drawn.length ? 'has-text' : 'no-word-mote-in-window';
+              Math.random = rnd0;
+              // 「恢复默认」→ 词库回内建那 10 个
+              var btns3 = pnl3.querySelectorAll('.wp-btn');
+              W.btnCount = btns3.length;
+              btns3[0].click();
+              W.afterResetText = ta3.value.split('\n').join('|');
+              W.afterResetLabel = cntOf(ta3);
+              try { W.afterResetWords = JSON.parse(localStorage.getItem('whale-pond-words-v1') || 'null'); } catch(e){ W.afterResetWords = 'ERR ' + e; }   // 恢复默认不动词库 → 仍是自定义那几个
+            setTimeout(function(){
+              try {
+                // 脏值：类型错 / 空串 / 空白 / 重复 / 超长 / 非字符串 / 超量 250 个
+                var dirty = ['a', 1, '', '  x  ', 'a', '这'.repeat(30), null, true];
+                for (var d = 0; d < 250; d++) dirty.push('w' + d);
+                localStorage.setItem('whale-pond-settings-v1', JSON.stringify({ words: dirty }));
+                if (typeof window.__cleanup6 === 'function') window.__cleanup6();
+                window.__cleanup7 = fresh();
+                window.__pump(12, 40);
+                var p7 = document.getElementById('whale-pond-panel');
+                var ta7 = p7.querySelector('textarea.wp-words');
+                var healed = JSON.parse(localStorage.getItem('whale-pond-words-v1') || 'null');   // 旧版把 words 写在设置对象里 → 迁移并归一化
+                W.healLen = healed.length;
+                W.healHead = healed.slice(0, 3);
+                W.healLongLen = healed[2] ? healed[2].length : -1;
+                W.healHasDirty = healed.indexOf(1) >= 0 || healed.indexOf(null) >= 0 || healed.indexOf(true) >= 0 || healed.indexOf('') >= 0;
+                W.healLabel = cntOf(ta7);
+                W.healTaHead = ta7.value.split('\n').slice(0, 3).join('|');
+                // 收尾：清存储 → 重新 apply → 留一个干净的页面给截图
+                localStorage.removeItem('whale-pond-settings-v1'); localStorage.removeItem('whale-pond-words-v1');
+                if (typeof window.__cleanup7 === 'function') window.__cleanup7();
+                window.__cleanup8 = fresh(); window.__pump(15, 40);
+                W.finalArcs = arcs();
+                W.finalErrs = window.__log.slice(-2);
+              } catch(e){ out.fuzz3Err2 = 'CAUGHT ' + (e && e.stack ? e.stack : e); }
+              out.frameErrors = window.__log.slice(0, 4);
+              if (window.__fuzz4) window.__fuzz4(emit); else emit();
+            }, 600);
+          } catch(e){ out.fuzz3Err1 = 'CAUGHT ' + (e && e.stack ? e.stack : e); emit(); }
+        }, 800);
+      } catch(e){ out.fuzz3Err = 'CAUGHT ' + (e && e.stack ? e.stack : e); emit(); }
+      // ================= fuzz 第四批：词库持久化（用户 m02898「改了的词库无法保存」） =================
+      // 根因不是「存不进」，而是后来一次整份默认值回写把 words 抹成 null。修法 = 词库单独存
+      // whale-pond-words-v1，任何整份设置回写/恢复默认都动不到它；并且改一下存一下（不再防抖）。
+      window.__fuzz4 = function (emit4) {
+        var X = {}; out.fuzz4 = X;
+        var WK = 'whale-pond-words-v1', SK = 'whale-pond-settings-v1';
+        var BUILTIN4 = ['潮汐', '盐', '月光', '鲸落', '暗流', '礁石', '海雾', '星光', '潮声', '深蓝'];
+        function pnlNow(){ return document.getElementById('whale-pond-panel'); }
+        function openP(){ var g = document.getElementById('whale-pond-gear'), p = pnlNow(); for (var i = 0; i < 3 && getComputedStyle(p).display !== 'block'; i++) g.click(); return p; }
+        function taNow(){ return pnlNow().querySelector('textarea.wp-words'); }
+        function cnt(t){ var ch = t.parentElement.children; return ch[ch.length - 1].textContent; }
+        function type(t, s){ t.value = s; t.dispatchEvent(new Event('input')); }
+        try {
+          if (typeof window.__cleanup8 === 'function') window.__cleanup8();   // fuzz3 特意留下的那个实例（面板也会占一个 id）
+          localStorage.removeItem(WK); localStorage.removeItem(SK);
+          window.__cleanup9 = fresh(); window.__pump(6, 40);
+          X.panelsAtStart = document.querySelectorAll('#whale-pond-panel').length;
+          openP(); var t = taNow();
+          // 1) 一输入就落盘（旧版 320ms 防抖，关得太快就白改了）
+          type(t, '甲\n乙');
+          X.immediate = localStorage.getItem(WK);
+          X.labelNow = cnt(t);
+          // 2) 旧版/另一个实例的「整份设置回写」（含 words:null）不能抹掉词库
+          localStorage.setItem(SK, JSON.stringify({ glass: 0.34, brightness: 1.6, count: 400, speed: 1, attract: true, ar: 340, ak: 1, ring: true, pad: true, padR: 170, padM: 132, padPower: 4, words: null }));
+          if (typeof window.__cleanup9 === 'function') window.__cleanup9();
+          window.__cleanup10 = fresh(); window.__pump(6, 40);            // 等价于刷新一次页面
+          var p2 = openP(), t2 = taNow();
+          X.afterLegacy = t2.value.split('\n').join('|');
+          X.afterLegacyWords = localStorage.getItem(WK);
+          var rnd = Math.random; Math.random = function () { return 0.05; };
+          var t0 = window.__texts.length;
+          var ivs = window.__ivals || [];
+          for (var q = 0; q < ivs.length; q++) { try { ivs[q].fn(); } catch(e){ X.ivErr = String(e); } }
+          window.__pump(30, 40);
+          var drawn = window.__texts.slice(t0).filter(function (s) { return s && s !== '-1 token'; });
+          Math.random = rnd;
+          X.drawnTotal = drawn.length;
+          X.drawnCustom = drawn.filter(function (s) { return s === '甲' || s === '乙'; }).length;
+          X.drawnBuiltin = drawn.filter(function (s) { return BUILTIN4.indexOf(s) >= 0; }).length;
+          // 3)「恢复默认（词库保留）」真的不动词库
+          var btns = p2.querySelectorAll('.wp-btn');
+          X.resetLabel = btns[0].textContent;
+          btns[0].click();
+          X.afterResetWords = localStorage.getItem(WK);
+          X.afterResetTa = taNow().value.split('\n').join('|');
+          X.afterResetCount = cnt(taNow());
+          X.settingsHasWords = (localStorage.getItem(SK) || '').indexOf('words') >= 0;
+          // 4) 旧版迁移：只有设置对象里带 words、没有 W_KEY
+          localStorage.removeItem(WK);
+          localStorage.setItem(SK, JSON.stringify({ words: ['迁移甲', '迁移乙'] }));
+          if (typeof window.__cleanup10 === 'function') window.__cleanup10();
+          window.__cleanup11 = fresh(); window.__pump(6, 40);
+          openP();
+          X.migratedKey = localStorage.getItem(WK);
+          X.panelCount = document.querySelectorAll('#whale-pond-panel').length;
+          X.taCount = document.querySelectorAll('textarea.wp-words').length;
+          X.focusNow = document.activeElement ? document.activeElement.tagName + '.' + (document.activeElement.className || '') : 'none';
+          X.migratedTa = taNow().value.split('\n').join('|');
+          var g5 = document.getElementById('whale-pond-gear'); g5.click(); g5.click();   // 关→开 = 强制再刷一次面板
+          X.migratedTaReopen = taNow().value.split('\n').join('|');
+          // 5) 脏值走迁移路径也要被归一化（旧版把 words 写在设置对象里）
+          localStorage.removeItem(WK);
+          var dirty4 = ['a', 1, '', '  x  ', 'a', '这'.repeat(30), null, true];
+          for (var d = 0; d < 250; d++) dirty4.push('w' + d);
+          localStorage.setItem(SK, JSON.stringify({ words: dirty4 }));
+          if (typeof window.__cleanup11 === 'function') window.__cleanup11();
+          window.__cleanup12 = fresh(); window.__pump(6, 40); openP();
+          var healed4 = JSON.parse(localStorage.getItem(WK) || 'null');
+          X.dirtyLen = healed4 ? healed4.length : -1;
+          X.dirtyHead = healed4 ? healed4.slice(0, 3) : null;
+          X.dirtyLongLen = healed4 && healed4[2] ? healed4[2].length : -1;
+          X.dirtyHasDirty = healed4 ? (healed4.indexOf(1) >= 0 || healed4.indexOf(null) >= 0 || healed4.indexOf(true) >= 0 || healed4.indexOf('') >= 0) : null;
+          X.dirtyTaHead = taNow().value.split('\n').slice(0, 3).join('|');
+          // 收尾：清两个键 → 回默认 → 留一个干净页面
+          localStorage.removeItem(WK); localStorage.removeItem(SK);
+          if (typeof window.__cleanup12 === 'function') window.__cleanup12();
+          window.__cleanup13 = fresh(); window.__pump(15, 40);
+          X.finalArcs = arcs();
+          X.finalErrs = window.__log.slice(-2);
+        } catch (e) { out.fuzz4Err = 'CAUGHT ' + (e && e.stack ? e.stack : e); }
+        out.frameErrors = window.__log.slice(0, 4);
+        if (window.__fuzz5) window.__fuzz5(emit4); else emit4();
+      };
+      // ================= fuzz 第五批：性能计量（每帧 JS 毫秒 + 画布操作数） =================
+      window.__fuzz5 = function (emit5) {
+        var X = {}; out.perf = X;
+        function resetOps() { var o = window.__ops; for (var k in o) o[k] = 0; }
+        function snapOps() { var o = window.__ops, s = {}; for (var k in o) s[k] = o[k]; return s; }
+        function measure(nf) {
+          resetOps();
+          var t0 = performance.now();
+          window.__pump(nf, 40);
+          var ms = (performance.now() - t0) / nf;
+          var s = snapOps();
+          return { msPerFrame: Math.round(ms * 1000) / 1000,
+                   fill: s.fill, stroke: s.stroke, beginPath: s.beginPath,
+                   fillRect: s.fillRect, drawImage: s.drawImage, fillText: s.fillText,
+                   linGrad: s.createLinearGradient, radGrad: s.createRadialGradient,
+                   arcs: Math.round(s.arc / nf) };
+        }
+        try {
+          var g = document.getElementById('whale-pond-gear');
+          var p = document.getElementById('whale-pond-panel');
+          for (var i = 0; i < 4 && getComputedStyle(p).display !== 'block'; i++) g.click();
+          var rngs = p.querySelectorAll('input[type=range]');
+          X.sliders = rngs.length;
+          X.base400 = measure(30);
+          rngs[2].value = 2100; rngs[2].dispatchEvent(new Event('input'));
+          window.__pump(5, 40);
+          X.count2100 = measure(20);
+          rngs[2].value = 400; rngs[2].dispatchEvent(new Event('input'));
+          window.__pump(5, 40);
+          X.restored = measure(30);
+        } catch (e) { X.err = 'CAUGHT ' + (e && e.stack ? e.stack : e); }
+        out.frameErrors = window.__log.slice(0, 4);
+        if (window.__fuzz6) window.__fuzz6(emit5); else emit5();
+      };
+
+      // ============ fuzz 第六批：逐帧耗时 + 尖峰定位（2026-10-17 用户报「每秒卡一次」） ============
+      window.__fuzz6 = function (emit6) {
+        var Y = {}; out.spike = Y;
+        try {
+          var g = document.getElementById('whale-pond-gear');
+          var p = document.getElementById('whale-pond-panel');
+          for (var i = 0; i < 4 && getComputedStyle(p).display === 'block'; i++) g.click();
+          Y.panelDisplay = getComputedStyle(p).display;
+          window.__pump(6, 40);
+          var n = 300, durs = [], k;
+          for (k = 0; k < n; k++) {
+            var t0 = performance.now();
+            window.__pump(1, 40);
+            durs.push(performance.now() - t0);
+          }
+          var sorted = durs.slice().sort(function (a, b) { return a - b; });
+          function r2(v) { return Math.round(v * 100) / 100; }
+          var med = sorted[Math.floor(n * 0.5)];
+          Y.med = r2(med); Y.p90 = r2(sorted[Math.floor(n * 0.9)]); Y.max = r2(sorted[n - 1]);
+          Y.over2x = durs.filter(function (d) { return d > med * 2; }).length;
+          var hot = [];
+          for (k = 0; k < n; k++) { if (durs[k] > med * 2) hot.push(k); }
+          Y.spikes = hot.slice(0, 30);
+          Y.gap = [];
+          for (k = 1; k < hot.length && k < 12; k++) { Y.gap.push(hot[k] - hot[k - 1]); }
+          var order = durs.map(function (d, i) { return i; }).sort(function (a, b) { return durs[b] - durs[a]; });
+          Y.top = order.slice(0, 8).map(function (i) { return [i, r2(durs[i])]; });
+          function byMod(m) {
+            var sum = [], cnt = [], j;
+            for (j = 0; j < m; j++) { sum.push(0); cnt.push(0); }
+            for (j = 0; j < n; j++) { sum[j % m] += durs[j]; cnt[j % m]++; }
+            return sum.map(function (v, q) { return r2(v / cnt[q]); });
+          }
+          Y.m25 = byMod(25); Y.m30 = byMod(30);
+          window.__pump(4, 40);
+          var rngs = p.querySelectorAll('input[type=range]');
+          Y.sliders = rngs.length;
+          if (rngs.length > 9) {
+            rngs[9].value = 0.7;
+            var t1 = performance.now();
+            rngs[9].dispatchEvent(new Event('input'));
+            window.__pump(1, 40);
+            Y.qualityInputMs = r2(performance.now() - t1);
+            rngs[9].value = 1.0; rngs[9].dispatchEvent(new Event('input'));
+            window.__pump(4, 40);
+          }
+        } catch (e) { Y.err = 'CAUGHT ' + (e && e.stack ? e.stack : e); }
+        out.frameErrors = window.__log.slice(0, 4);
+        if (window.__fuzz7) window.__fuzz7(emit6); else emit6();
+      };
+
+      // ============ fuzz 第七批：离屏烘焙成本（2026-10-17 修「每秒卡一次」） ============
+      window.__fuzz7 = function (emit7) {
+        var Z = {}; out.bake = Z;
+        try {
+          var live = null, all = document.querySelectorAll('canvas');
+          for (var q = 0; q < all.length; q++) { if (all[q].id === 'whale-pond-canvas') live = all[q]; }
+          Z.liveBuf = live ? live.width + 'x' + live.height : 'none';
+          var P = CanvasRenderingContext2D.prototype;
+          var seen = [], px = 0, calls = 0, per = {};
+          function idx(c) { for (var j = 0; j < seen.length; j++) { if (seen[j].c === c) return j; } return -1; }
+          var names = ['fillRect', 'fill', 'clearRect', 'drawImage', 'createLinearGradient', 'createRadialGradient'];
+          for (var n = 0; n < names.length; n++) {
+            (function (name) {
+              var orig = P[name];
+              P[name] = function () {
+                var c = this.canvas;
+                if (c && !c.id) {
+                  var k = idx(c);
+                  if (k < 0) { seen.push({ c: c, w: c.width, h: c.height }); k = seen.length - 1; }
+                  calls++; px += c.width * c.height;
+                  per[name] = (per[name] || 0) + 1;
+                }
+                return orig.apply(this, arguments);
+              };
+            })(names[n]);
+          }
+          if (typeof window.__cleanup13 === 'function') window.__cleanup13();
+          window.__cleanup14 = fresh();
+          Z.fresh = typeof window.__cleanup14;
+          window.__pump(6, 40);
+          var before = px;
+          window.__pump(300, 40);           // 12 秒虚拟时间
+          Z.offCalls = calls;
+          Z.offPixels = px - before;
+          Z.pxPerSec = Math.round((px - before) / 12);
+          Z.offCanvases = seen.map(function (t) { return t.w + 'x' + t.h; });
+          Z.perOp = per;
+          Z.arcPerFrame = arcs();
+        } catch (e) { Z.err = 'CAUGHT ' + (e && e.stack ? e.stack : e); }
+        out.frameErrors = window.__log.slice(0, 4);
+        if (window.__fuzz8) window.__fuzz8(emit7); else emit7();
+      };
+
+      // ============ fuzz 第八批：光点运动方式 + 呼吸灯（2026-10-17 用户要求） ============
+      window.__fuzz8 = function (emit8) {
+        var Z = {}; out.motion = Z;
+        try {
+          if (typeof window.__cleanup14 === 'function') window.__cleanup14();
+          window.__cleanup15 = fresh();
+          Z.fresh = typeof window.__cleanup15;
+          var gear = document.getElementById('whale-pond-gear'), p = document.getElementById('whale-pond-panel');
+          for (var g = 0; g < 4 && p.style.display !== 'block'; g++) gear.click();
+          Z.panelOpen = p.style.display;
+          var sel = p.querySelector('select.wp-sel');
+          Z.selFound = !!sel;
+          Z.selOptions = sel ? sel.options.length : 0;
+          Z.selDefault = sel ? sel.value : '';
+          var cv = document.getElementById('whale-pond-canvas');
+          Z.canvasCss = cv ? cv.clientWidth + 'x' + cv.clientHeight : 'none';
+          var CX = cv ? cv.clientWidth / 2 : 377, CY = cv ? cv.clientHeight / 2 : 244;
+
+          var fills = 0, P = CanvasRenderingContext2D.prototype, ofill = P.fill;
+          P.fill = function () { if (this.canvas && this.canvas.id === 'whale-pond-canvas') fills++; return ofill.apply(this, arguments); };
+          function framePts(){ window.__rec = true; window.__pts = []; window.__pump(1, 40); window.__rec = false; return window.__pts.filter(function(t){ return t[2] < 16; }); }
+          function dd(P0){ var m = {}, o = []; for (var i = 0; i < P0.length; i++){ var k = Math.round(P0[i][0]) + ',' + Math.round(P0[i][1]); if (!m[k]) { m[k] = 1; o.push(P0[i]); } } return o; }
+          function vecs(P0, Q0){
+            var A = dd(P0), B = dd(Q0), sx = 0, sy = 0, n = 0, sp = 0, al = 0;
+            for (var i = 0; i < A.length; i++){
+              var best = 1e9, bi = -1;
+              for (var j = 0; j < B.length; j++){
+                var dx = A[i][0]-B[j][0], dy = A[i][1]-B[j][1], d2 = dx*dx+dy*dy;
+                if (d2 < best){ best = d2; bi = j; }
+              }
+              if (bi < 0 || best > 400) continue;
+              var vx = B[bi][0]-A[i][0], vy = B[bi][1]-A[i][1], vl = Math.sqrt(vx*vx+vy*vy);   // 后一帧 - 前一帧
+              if (vl < 0.05) continue;
+              sx += vx; sy += vy; n++; sp += vl;
+              var tx = -(A[i][1]-CY), ty = (A[i][0]-CX), tl = Math.sqrt(tx*tx+ty*ty)+1;
+              al += (vx*tx/tl + vy*ty/tl) / vl;
+            }
+            return n ? [ +(sx/n).toFixed(2), +(sy/n).toFixed(2), +(sp/n).toFixed(2), +(al/n).toFixed(2), n ] : [0,0,0,0,0];
+          }
+          function sample(mode){
+            sel.value = mode; sel.dispatchEvent(new Event('change'));
+            window.__pump(45, 40);
+            var sx = 0, sy = 0, sp = 0, sa = 0, c = 0;
+            for (var k = 0; k < 10; k++){
+              var v = vecs(framePts(), framePts());
+              if (v[4] > 30){ sx += v[0]; sy += v[1]; sp += v[2]; sa += v[3]; c++; }
+            }
+            return c ? { mx: +(sx/c).toFixed(2), my: +(sy/c).toFixed(2), sp: +(sp/c).toFixed(2), al: +(sa/c).toFixed(2), n: c } : { err: 'no samples' };
+          }
+          Z.drift = sample('drift');
+          Z.fall = sample('fall');
+          Z.rise = sample('rise');
+          Z.current = sample('current');
+          Z.swirl = sample('swirl');
+          Z.deltas = {
+            fall: [ +(Z.fall.mx-Z.drift.mx).toFixed(2), +(Z.fall.my-Z.drift.my).toFixed(2) ],
+            rise: [ +(Z.rise.mx-Z.drift.mx).toFixed(2), +(Z.rise.my-Z.drift.my).toFixed(2) ],
+            current: [ +(Z.current.mx-Z.drift.mx).toFixed(2), +(Z.current.my-Z.drift.my).toFixed(2) ],
+            swirl: [ +(Z.swirl.mx-Z.drift.mx).toFixed(2), +(Z.swirl.my-Z.drift.my).toFixed(2), +(Z.swirl.sp-Z.drift.sp).toFixed(2) ]
+          };
+          var ls = localStorage.getItem('whale-pond-settings-v1') || '';
+          Z.lsMotion = (ls.match(/"motion":"[a-z]+"/) || ['none'])[0];
+          sel.value = 'drift'; sel.dispatchEvent(new Event('change')); window.__pump(8, 40);
+          function radii(){
+            var A = framePts(), m = {}, o = [];
+            for (var i = 0; i < A.length; i++){ if (A[i][2] < 20){ var k = Math.round(A[i][2]*100)/100; if (!(k in m)) { m[k] = 1; o.push(k); } } }
+            o.sort(function(a,b){ return a-b; });
+            return { n: o.length, min: o[0], max: o[o.length-1] };
+          }
+          var f0 = fills; window.__pump(30, 40); Z.fillPerFrameNoBreathe = +((fills-f0)/30).toFixed(1);
+          Z.radiiNoBreathe = radii();
+          var boxes = p.querySelectorAll('input[type=checkbox]'), breatheBox = null;
+          for (var b = 0; b < boxes.length; b++){ var lab = boxes[b].parentNode ? (boxes[b].parentNode.textContent || '') : ''; if (lab.indexOf('呼吸灯') >= 0) breatheBox = boxes[b]; }
+          Z.breatheBoxFound = !!breatheBox;
+          if (breatheBox){ breatheBox.checked = true; breatheBox.dispatchEvent(new Event('change')); }
+          window.__pump(30, 40);
+          Z.radiiBreathe = radii();
+          var f1 = fills; window.__pump(30, 40); Z.fillPerFrameBreathe = +((fills-f1)/30).toFixed(1);
+          Z.lsBreathe = (localStorage.getItem('whale-pond-settings-v1') || '').indexOf('"breathe":true') >= 0;
+          Z.arcPerFrame = arcs();
+          Z.badArcs = 0;
+          if (breatheBox){ breatheBox.checked = false; breatheBox.dispatchEvent(new Event('change')); }
+          sel.value = 'drift'; sel.dispatchEvent(new Event('change'));
+          P.fill = ofill;
+          window.__pump(2, 40);
+        } catch (e) { Z.err = 'CAUGHT ' + (e && e.stack ? e.stack : e); }
+        out.frameErrors = window.__log.slice(0, 4);
+        emit8();
+      };
+    }, 60);
+  })();
+</script>
+</body></html>
