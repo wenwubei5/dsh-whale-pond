@@ -154,7 +154,7 @@ src/whale_panel.js    # 控制台（面板）源码
 build/build.py        # 生成器：按行号剪裁 src/whale_pond.html + 注入补丁 → lib/client.js
 lib/client.js         # 生成产物（已提交，装完即用，不需要构建工具）
 test/harness.html     # 离线夹具：假 __ModuleLoader__ + 手动 rAF 泵，无头浏览器 3 秒跑完
-test/probes/*.js      # 真页面 CDP 探针（运动方式 / 控制台 / 词库 / 发射区 / 越界值 / 全控件扫描）
+test/probes/*.js      # 真页面 CDP 探针（停用开关 / 运动方式 / 控制台 / 词库 / 发射区 / 越界值 / 全控件扫描）
 ```
 
 重建（会重写 `lib/client.js`、`cordis.patch.yml`、`package.json`）：
