@@ -5,11 +5,13 @@
 		// =====================================================================
 		var PANEL_ID = "whale-pond-panel";
 		var GEAR_ID = "whale-pond-gear";
+		var POWER_ID = "whale-pond-power";   // 一键停用/恢复（2026-10-17：要能真的停掉）
 		var S_KEY = "whale-pond-settings-v1";
 		var W_KEY = "whale-pond-words-v1";   // 词库单独存：整份设置回写/恢复默认都动不到它
 		var HOOKS = {};                 // start() 内部回填：tokens / canvas / respawn
-		var S_KEYS = ["glass","brightness","count","speed","attract","ar","ak","ring","popToken","popWord","pad","padR","padM","padPower","flow","breathe","breatheRate","motion","quality","words"];
+		var S_KEYS = ["enabled","glass","brightness","count","speed","attract","ar","ak","ring","popToken","popWord","pad","padR","padM","padPower","flow","breathe","breatheRate","motion","quality","words"];
 		var S_DEFAULTS = {
+			enabled: true,   // 总开关：false = 真停（动画停、玻璃撤掉、界面回原样），齿轮与面板留着
 			glass: 0.34,      // 界面面板不透明度（越小海越明显）
 			brightness: 1.6,  // 画布亮度
 			count: 400,       // 目标光点数
@@ -160,6 +162,12 @@
 			"font:15px/28px -apple-system,'Segoe UI',system-ui,sans-serif;text-align:center;cursor:pointer;",
 			"opacity:.55;transition:opacity .15s;-webkit-user-select:none;user-select:none;backdrop-filter:blur(3px)}",
 			"#" + GEAR_ID + ":hover{opacity:1}",
+			"#" + POWER_ID + "{position:fixed;right:52px;top:46px;width:30px;height:30px;border-radius:50%;z-index:2147483000;",
+			"background:rgba(8,14,22,.72);border:1px solid rgba(255,168,96,.28);color:rgba(255,196,120,.85);",
+			"font:12px/28px -apple-system,'Segoe UI',system-ui,sans-serif;text-align:center;cursor:pointer;",
+			"opacity:.38;transition:opacity .15s,color .15s;-webkit-user-select:none;user-select:none;backdrop-filter:blur(3px)}",
+			"#" + POWER_ID + ":hover{opacity:1}",
+			"#" + POWER_ID + ".off{color:#ffb066;border-color:rgba(255,168,96,.62);background:rgba(255,168,96,.14);opacity:.85}",
 			"#" + PANEL_ID + "{position:fixed;right:14px;top:84px;width:334px;max-height:78vh;overflow:auto;z-index:2147483001;",
 			"display:none;background:rgba(6,11,18,.95);border:1px solid rgba(255,168,96,.28);border-radius:12px;",
 			"padding:14px 14px 12px;box-shadow:0 18px 50px rgba(0,0,0,.6);color:#cfe3f2;backdrop-filter:blur(9px);",
@@ -181,6 +189,8 @@
 			"#" + PANEL_ID + " .wp-btn:hover{background:rgba(255,168,96,.16)}"
 		].join(NL);
 		var CTL = [
+			["g", "开关"],
+			["c", "enabled", "启用壁纸", "关掉 = 真停：动画停、玻璃背景撤掉、界面回到原样（齿轮和这个面板还在）。也可以直接点右上角那个 ■"],
 			["g", "界面"],
 			["r", "glass", "面板不透明度", 0.15, 0.75, 0.01, "越小，海越明显"],
 			["r", "brightness", "画布亮度", 1.0, 2.2, 0.05, ""],
@@ -211,7 +221,7 @@
 			["g", "词库（鲸鱼吃的词）"],
 			["w", "words", "词库", "一行一个词，逗号 / 顿号也行；最多 200 个、每个 24 字。改一下存一下，刷新也不会丢。清空 = 回到内建那 10 个词；下面的「恢复默认」不会动词库"]
 		];
-		var panelEl = null, gearEl = null, valRefs = [];
+		var panelEl = null, gearEl = null, powerEl = null, valRefs = [];
 		function mkEl(tag, css, txt){
 			var d = document.createElement(tag);
 			if(css) d.style.cssText = css;
@@ -231,6 +241,7 @@
 				if(r.sel) r.sel.value = S[r.key];
 			}
 			refreshWords();
+			refreshGear();
 		}
 		var perfTimer = 0, perfEl = null;
 		var qTimer = 0;
@@ -242,6 +253,7 @@
 		}
 		function refreshPerf(){
 			if(!perfEl) return;
+			if(!S.enabled){ perfEl.textContent = "已停用 · 动画停、玻璃已撤（勾「启用壁纸」或点右上角 ■ 就回来）"; return; }
 			var p = HOOKS.perfInfo ? HOOKS.perfInfo() : null;
 			if(!p){ perfEl.textContent = "（壁纸还没起来）"; return; }
 			var eff = Math.round(p.quality * 100) / 100;
@@ -250,9 +262,26 @@
 		function applyCanvasFilter(){
 			if(HOOKS.canvas) HOOKS.canvas.style.filter = "brightness(" + S.brightness + ") saturate(1.12)";
 		}
+		function refreshGear(){
+			if(powerEl){
+				powerEl.textContent = S.enabled ? "\u25a0" : "\u25b6";
+				powerEl.title = S.enabled ? "停用壁纸（动画停、界面复原）" : "重新启用壁纸";
+				powerEl.className = S.enabled ? "" : "off";
+			}
+			if(gearEl){
+				gearEl.title = S.enabled ? "鲸鱼壁纸设置" : "鲸鱼壁纸已停用 · 点齿轮重新开";
+				gearEl.style.opacity = S.enabled ? "" : "0.3";
+			}
+		}
 		function syncLive(key){
+			if(key === undefined || key === "enabled"){
+				if(HOOKS.setEnabled) HOOKS.setEnabled(!!S.enabled);
+				if(HOOKS.tokens){ if(S.enabled) HOOKS.tokens.apply(); else HOOKS.tokens.reset(); }
+				if(S.enabled && HOOKS.respawn) HOOKS.respawn(S.count);
+				refreshGear();
+			}
 			if(key === undefined || key === "brightness") applyCanvasFilter();
-			if(key === undefined || key === "glass"){ if(HOOKS.tokens) HOOKS.tokens.apply(); }
+			if((key === undefined || key === "glass") && S.enabled){ if(HOOKS.tokens) HOOKS.tokens.apply(); }
 			if((key === undefined || key === "count") && HOOKS.respawn) HOOKS.respawn(S.count);
 			if(key === undefined){ if(HOOKS.resizeCanvas) HOOKS.resizeCanvas(); }
 			else if(key === "quality") qResizeSoon();
@@ -281,6 +310,11 @@
 			gearEl.addEventListener("mousedown", function(e){ e.stopPropagation(); });
 			gearEl.addEventListener("click", function(e){ e.stopPropagation(); togglePanel(); });
 			document.body.appendChild(gearEl);
+			powerEl = mkEl("div", "", "\u25a0");
+			powerEl.id = POWER_ID;
+			powerEl.addEventListener("mousedown", function(e){ e.stopPropagation(); });
+			powerEl.addEventListener("click", function(e){ e.stopPropagation(); applyChange("enabled", !S.enabled); });
+			document.body.appendChild(powerEl);
 			panelEl = mkEl("div", "", "");
 			panelEl.id = PANEL_ID;
 			panelEl.addEventListener("mousedown", function(e){ e.stopPropagation(); });
@@ -394,7 +428,8 @@
 			document.removeEventListener("keydown", onKey, true);
 			if(panelEl && panelEl.parentNode) panelEl.parentNode.removeChild(panelEl);
 			if(gearEl && gearEl.parentNode) gearEl.parentNode.removeChild(gearEl);
+			if(powerEl && powerEl.parentNode) powerEl.parentNode.removeChild(powerEl);
 			if(perfTimer){ clearInterval(perfTimer); perfTimer = 0; }
 			if(qTimer){ clearTimeout(qTimer); qTimer = 0; }
-			panelEl = null; gearEl = null; perfEl = null; valRefs = [];
+			panelEl = null; gearEl = null; powerEl = null; perfEl = null; valRefs = [];
 		}

@@ -38,7 +38,8 @@ I3 + "window.addEventListener('resize', resize); resize();")
 
 FRAME_HEAD = I3 + ("function frame(ts){" + NL +
 I3 + "  if(!alive) return;" + NL +
-I3 + "  if(reduce && frames > 120) return;" + NL +
+I3 + "  if(!S.enabled){ running = false; return; }" + NL +
+I3 + "  if(reduce && frames > 120){ running = false; return; }" + NL +
 I3 + "  raf = requestAnimationFrame(frame);" + NL +
 I3 + "  if(document.hidden) return;" + NL +
 I3 + "  if(!last) last = ts;" + NL +
@@ -72,7 +73,7 @@ I3 + "window.addEventListener('mousemove', onMove, { passive: true });" + NL +
 I3 + "window.addEventListener('mouseleave', onLeave);")
 
 TAIL = I3 + ("timers.push(setInterval(function(){" + NL +
-I3 + "  if(!alive || document.hidden) return;" + NL +
+I3 + "  if(!alive || !S.enabled || document.hidden) return;" + NL +
 I3 + "  var mx = whale.x + whale.flip * 58, my = whale.y + 1;" + NL +
 I3 + "  for(var i = motes.length - 1; i >= 0; i--){" + NL +
 I3 + "    var m = motes[i];" + NL +
@@ -85,13 +86,31 @@ I3 + "      if(motes.length < S.restock){ if(Math.random() < 0.1) spawnWord(); e
 I3 + "    }" + NL +
 I3 + "  }" + NL +
 I3 + "}, 120));" + NL +
-I3 + "timers.push(setInterval(function(){ if(!alive || document.hidden) return; spawnWord(); }, 12000));" + NL +
+I3 + "timers.push(setInterval(function(){ if(!alive || !S.enabled || document.hidden) return; spawnWord(); }, 12000));" + NL +
 I3 + "HOOKS.respawn = function(n){" + NL +
-I3 + "  if(!alive) return;" + NL +
+I3 + "  if(!alive || !S.enabled) return;" + NL +
 I3 + "  while(motes.length > n) motes.pop();" + NL +
 I3 + "  for(var i = motes.length; i < n; i++) spawn();" + NL +
 I3 + "};" + NL +
-I3 + "raf = requestAnimationFrame(frame);" + NL +
+I3 + "// 控制台总开关（2026-10-17）：停 = 停 rAF、藏画布、两个定时器一起歇着；" + NL +
+I3 + "// 恢复 = 重新排一帧，并让面板把光点数量补齐。" + NL +
+I3 + "var running = false;" + NL +
+I3 + "function run(){" + NL +
+I3 + "  if(!alive || running || !S.enabled) return;" + NL +
+I3 + "  running = true;" + NL +
+I3 + "  raf = requestAnimationFrame(frame);" + NL +
+I3 + "}" + NL +
+I3 + "function halt(){" + NL +
+I3 + "  running = false;" + NL +
+I3 + "  if(raf){ cancelAnimationFrame(raf); raf = 0; }" + NL +
+I3 + "}" + NL +
+I3 + "HOOKS.setEnabled = function(on){" + NL +
+I3 + "  if(!alive) return;" + NL +
+I3 + "  var want = on !== false;" + NL +
+I3 + "  cv.style.display = want ? '' : 'none';" + NL +
+I3 + "  if(want) run(); else halt();" + NL +
+I3 + "};" + NL +
+I3 + "HOOKS.setEnabled(S.enabled);" + NL +
 I3 + "return function stop(){" + NL +
 I3 + "  alive = false;" + NL +
 I3 + "  if(raf) cancelAnimationFrame(raf);" + NL +
@@ -193,7 +212,7 @@ FOOTER = NL.join([
 '			function mount(){',
 '				document.body.insertBefore(canvas, document.body.firstChild);',
 '				document.head.appendChild(style);',
-'				tokens.apply();',
+'				if(S.enabled) tokens.apply();',
 '				HOOKS.tokens = tokens;',
 '				HOOKS.canvas = canvas;',
 '				pond = start(canvas);',
@@ -202,7 +221,7 @@ FOOTER = NL.join([
 '			var timer = 0;',
 '			var observer = new MutationObserver(function(){',
 '				clearTimeout(timer);',
-'				timer = setTimeout(function(){ tokens.apply(); }, 180);',
+'				timer = setTimeout(function(){ if(S.enabled) tokens.apply(); }, 180);',
 '			});',
 '			observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-ds-dark-theme", "class"] });',
 '			function boot(){',
@@ -554,7 +573,7 @@ io.open(OUT + '/cordis.patch.yml', 'w', encoding='utf-8', newline=NL).write(NL.j
 
 pkg = {
   "name": "dsh-whale-pond",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "小鲸鱼壁纸：把鲸鱼的自留地铺在 DSH Web 界面背后（纯视觉背景插件，不拦鼠标不抢键盘）",
   "type": "module",
   "main": "lib/index.js",

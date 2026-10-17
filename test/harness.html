@@ -208,6 +208,15 @@
       out.panelDisplayOpen = panel ? getComputedStyle(panel).display : 'n/a';
       var rs = panel ? panel.querySelectorAll('input[type=range]') : [];
       var cbs = panel ? panel.querySelectorAll('input[type=checkbox]') : [];
+      // 复选框按下标取会在加控件后错位（2026-10-17 加了「启用壁纸」）—— 一律按标签找
+      function cbByLabel(txt){
+        for (var i = 0; i < cbs.length; i++){
+          var lab = cbs[i].parentNode ? (cbs[i].parentNode.textContent || '') : '';
+          if (lab.indexOf(txt) >= 0) return cbs[i];
+        }
+        return null;
+      }
+      out.padBoxFound = !!cbByLabel('启用发射台');
       out.sliderCount = rs.length;
       out.checkboxCount = cbs.length;
       out.sliderNames = [];
@@ -222,13 +231,13 @@
       out.arcPerFrameAfterCount = window.__arcHist.slice(-2);
       out.countLabelAfterSet = rs.length >= 9 ? rs[2].parentNode.children[0].children[1].textContent : '';
       try { out.savedToLocalStorage = (localStorage.getItem('whale-pond-settings-v1') || '').slice(0, 90); } catch(e){ out.savedToLocalStorage = 'LS_ERR ' + e; }
-      // 2) 关掉发射台（复选框下标 4）后不该再画发射台圆
+      // 2) 关掉发射台后不该再画发射台圆（按标签找那一个复选框）
+      var padBox = cbByLabel('启用发射台');
       out.padArcsBeforeToggle = padArcs(framePts());
-      if (cbs.length >= 5 && !cbs[4].checked) cbs[4].click();
-      if (cbs.length >= 5){ cbs[4].checked = false; cbs[4].dispatchEvent(new Event('change')); }
+      if (padBox){ padBox.checked = false; padBox.dispatchEvent(new Event('change')); }
       window.__pump(4, 40);
       out.padArcsAfterToggle = padArcs(framePts());
-      if (cbs.length >= 5){ cbs[4].checked = true; cbs[4].dispatchEvent(new Event('change')); }
+      if (padBox){ padBox.checked = true; padBox.dispatchEvent(new Event('change')); }
       // 3) 恢复默认按钮 + Esc 关闭
       // 2b) 画布亮度与面板不透明度（token）是否真的落到 DOM
       var cvEl = document.getElementById('whale-pond-canvas');
@@ -303,22 +312,25 @@
         function newErrs(){ return window.__log.slice(F.err0); }
         // 1) 每个控件推到 min / max（滑杆）与 false / true（复选框）
         F.perCtl = [];
-        function probe(tag, i, v, isCb){
+        function probe(tag, ref, v, isCb){
           mark();
-          if (isCb){ cbs[i].checked = v; cbs[i].dispatchEvent(new Event('change')); }
-          else { rs[i].value = v; rs[i].dispatchEvent(new Event('input')); }
+          if (isCb){ ref.checked = v; ref.dispatchEvent(new Event('change')); }
+          else { rs[ref].value = v; rs[ref].dispatchEvent(new Event('input')); }
           window.__pump(6, 40);
           F.perCtl.push([tag, arcs(), (newErrs()[0] || '') + '', F.badArcs]);
         }
         var SNAME = ['glass','brightness','count','speed','ar','ak','padR','padM','padPower'];
-        var CNAME = ['attract','ring','popToken','popWord','pad'];
+        var CNAME = ['attract','ring','popToken','popWord','pad','breathe'];
+        var CLABEL = ['洋流吸引光点','显示吸引范围光环','飘字「-1 token」','飘字「吃掉','启用发射台','呼吸灯'];
         for (var i = 0; i < rs.length && i < 9; i++){
           probe('s:' + SNAME[i] + '=min', i, parseFloat(rs[i].min), false);
           probe('s:' + SNAME[i] + '=max', i, parseFloat(rs[i].max), false);
         }
-        for (var i = 0; i < cbs.length && i < 5; i++){
-          probe('c:' + CNAME[i] + '=off', i, false, true);
-          probe('c:' + CNAME[i] + '=on', i, true, true);
+        for (var i = 0; i < CNAME.length; i++){
+          var cel = cbByLabel(CLABEL[i]);
+          if (!cel) continue;
+          probe('c:' + CNAME[i] + '=off', cel, false, true);
+          probe('c:' + CNAME[i] + '=on', cel, true, true);
         }
         F.errAfterSweep = newErrs();
         // 2) 极端组合 + 性能
@@ -329,8 +341,9 @@
         // 3) Esc 是否穿透给宿主（宿主用 Esc 取消生成 = 真事故）
         window.__hostEsc = 0;
         window.addEventListener('keydown', function(){ window.__hostEsc++; });
-        document.getElementById('whale-pond-gear').click();   // 确保面板是开的
-        F.panelOpenBeforeEsc = getComputedStyle(document.getElementById('whale-pond-panel')).display;
+        var gearE = document.getElementById('whale-pond-gear'), pnlE = document.getElementById('whale-pond-panel');
+        for (var gi = 0; gi < 3 && getComputedStyle(pnlE).display !== 'block'; gi++) gearE.click();
+        F.panelOpenBeforeEsc = getComputedStyle(pnlE).display;
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
         F.panelAfterEsc = getComputedStyle(document.getElementById('whale-pond-panel')).display;
         F.hostSawEscPanelOpen = window.__hostEsc;
@@ -802,8 +815,147 @@
           window.__pump(2, 40);
         } catch (e) { Z.err = 'CAUGHT ' + (e && e.stack ? e.stack : e); }
         out.frameErrors = window.__log.slice(0, 4);
-        emit8();
+        if (window.__fuzz9) window.__fuzz9(emit8); else emit8();
       };
+      // ============ fuzz 第九批：总开关（2026-10-17 用户要求：要能真的停掉） ============
+      window.__fuzz9 = function (emit9) {
+        var Z = {}; out.power = Z;
+        try {
+          if (typeof window.__cleanup15 === 'function') window.__cleanup15();
+          window.__cleanup16 = fresh();
+          Z.fresh = typeof window.__cleanup16;
+          window.__pump(10, 40);
+          var gear = document.getElementById('whale-pond-gear');
+          var panel = document.getElementById('whale-pond-panel');
+          for (var g = 0; g < 4 && panel.style.display !== 'block'; g++) gear.click();
+          Z.panelOpen = panel.style.display;
+          var pw = document.getElementById('whale-pond-power');
+          Z.powerFound = !!pw;
+          var cv = document.getElementById('whale-pond-canvas');
+          var body = document.body;
+          var boxes = panel.querySelectorAll('input[type=checkbox]'), enBox = null;
+          for (var b = 0; b < boxes.length; b++){
+            var lab = boxes[b].parentNode ? (boxes[b].parentNode.textContent || '') : '';
+            if (lab.indexOf('启用壁纸') >= 0) enBox = boxes[b];
+          }
+          Z.enBoxFound = !!enBox;
+          Z.checkedCount = boxes.length;
+          Z.enBoxCheckedInit = enBox ? enBox.checked : null;
+
+          // —— 启用态基线 ——
+          var h0 = window.__arcHist.length;
+          Z.onBodyBg = body.style.background || '';
+          Z.onTokenInline = (body.style.getPropertyValue('--dsw-alias-bg-base') || '').slice(0, 22);
+          Z.onCanvasDisplay = cv.style.display || 'block';
+          Z.onPowerText = pw.textContent;
+          window.__pump(20, 40);
+          Z.onFrames = window.__arcHist.length - h0;
+          Z.onArcs = window.__arcHist.slice(-2);
+
+          // —— 点电源按钮：停 ——
+          pw.click();
+          window.__pump(3, 40);
+          var offBase = window.__arcHist.length;
+          window.__pump(40, 40);
+          Z.offFrames = window.__arcHist.length - offBase;
+          Z.offBodyBg = body.style.background || '';
+          Z.offTokenInline = (body.style.getPropertyValue('--dsw-alias-bg-base') || '').slice(0, 22);
+          Z.offCanvasDisplay = cv.style.display;
+          Z.offPowerText = pw.textContent;
+          Z.offPowerClass = pw.className || '';
+          Z.offGearOpacity = gear.style.opacity || '';
+          Z.offEnBoxChecked = enBox ? enBox.checked : null;
+          Z.lsEnabledOff = (localStorage.getItem('whale-pond-settings-v1') || '').indexOf('"enabled":false') >= 0;
+          // 面板重开一次，让「运行状态」重算
+          gear.click(); gear.click();
+          var divs = panel.querySelectorAll('div'), perfTxt = '';
+          for (var i = 0; i < divs.length; i++) if ((divs[i].textContent || '').indexOf('已停用') === 0) perfTxt = divs[i].textContent;
+          Z.perfOffText = perfTxt.slice(0, 12);
+
+          // —— 停着的时候改滑杆，不该把玻璃或动画带回来 ——
+          var ranges = panel.querySelectorAll('input[type=range]');
+          Z.rangeCount = ranges.length;
+          ranges[0].value = '0.5'; ranges[0].dispatchEvent(new Event('input'));
+          ranges[2].value = '700'; ranges[2].dispatchEvent(new Event('input'));
+          window.__pump(10, 40);
+          Z.offSliderBodyBg = body.style.background || '';
+          var b4 = window.__arcHist.length; window.__pump(20, 40);
+          Z.offSliderFrames = window.__arcHist.length - b4;
+          ranges[0].value = '0.34'; ranges[0].dispatchEvent(new Event('input'));
+          ranges[2].value = '400'; ranges[2].dispatchEvent(new Event('input'));
+
+          // —— 再点一次：回来 ——
+          pw.click();
+          window.__pump(20, 40);
+          Z.on2BodyBg = body.style.background || '';
+          Z.on2TokenInline = (body.style.getPropertyValue('--dsw-alias-bg-base') || '').slice(0, 22);
+          Z.on2CanvasDisplay = cv.style.display || 'block';
+          Z.on2PowerText = pw.textContent;
+          Z.on2EnBox = enBox ? enBox.checked : null;
+          var a2 = window.__arcHist.length; window.__pump(20, 40);
+          Z.on2Frames = window.__arcHist.length - a2;
+          Z.on2Arcs = window.__arcHist.slice(-2);
+
+          // —— 面板里的复选框也能停 ——
+          if (enBox){ enBox.checked = false; enBox.dispatchEvent(new Event('change')); }
+          window.__pump(4, 40);
+          Z.boxOffDisplay = cv.style.display;
+          Z.boxOffPower = pw.textContent;
+          if (enBox){ enBox.checked = true; enBox.dispatchEvent(new Event('change')); }
+          window.__pump(8, 40);
+          Z.boxOnDisplay = cv.style.display || 'block';
+          Z.boxOnArcs = window.__arcHist.slice(-2);
+
+          // —— 「恢复默认」应该把总开关打开 ——
+          if (enBox){ enBox.checked = false; enBox.dispatchEvent(new Event('change')); }
+          window.__pump(4, 40);
+          Z.beforeResetDisplay = cv.style.display;
+          var btns = panel.querySelectorAll('.wp-btn'), resetBtn = null;
+          for (var k = 0; k < btns.length; k++) if ((btns[k].textContent || '').indexOf('恢复默认') >= 0) resetBtn = btns[k];
+          Z.resetBtnFound = !!resetBtn;
+          if (resetBtn) resetBtn.click();
+          window.__pump(8, 40);
+          Z.resetDisplay = cv.style.display || 'block';
+          Z.resetEnBox = enBox ? enBox.checked : null;
+          Z.resetLsEnabled = (localStorage.getItem('whale-pond-settings-v1') || '').indexOf('"enabled":true') >= 0;
+
+          // —— 刷新一次：localStorage 里 enabled:false，起来就该是停的 ——
+          var st = JSON.parse(localStorage.getItem('whale-pond-settings-v1') || '{}');
+          st.enabled = false; st.count = 400;
+          localStorage.setItem('whale-pond-settings-v1', JSON.stringify(st));
+          if (typeof window.__cleanup16 === 'function') window.__cleanup16();
+          window.__cleanup17 = fresh();
+          window.__pump(30, 40);
+          var cv2 = document.getElementById('whale-pond-canvas');
+          var p2 = document.getElementById('whale-pond-panel');
+          Z.bootOffDisplay = cv2 ? cv2.style.display : 'none';
+          Z.bootOffBodyBg = body.style.background || '';
+          Z.bootOffToken = (body.style.getPropertyValue('--dsw-alias-bg-base') || '').slice(0, 22);
+          var b5 = window.__arcHist.length;
+          window.__pump(40, 40);
+          Z.bootOffFrames = window.__arcHist.length - b5;
+          var pw2 = document.getElementById('whale-pond-power'), gear2 = document.getElementById('whale-pond-gear');
+          Z.bootOffPowerText = pw2 ? pw2.textContent : '';
+          Z.bootOffGearOpacity = gear2 ? (gear2.style.opacity || '') : '';
+          for (var g2 = 0; g2 < 4 && p2.style.display !== 'block'; g2++) gear2.click();
+          Z.bootOffPanel = p2.style.display;
+          var boxes2 = p2.querySelectorAll('input[type=checkbox]'), en2 = null;
+          for (var b2 = 0; b2 < boxes2.length; b2++){ var l2 = boxes2[b2].parentNode ? (boxes2[b2].parentNode.textContent || '') : ''; if (l2.indexOf('启用壁纸') >= 0) en2 = boxes2[b2]; }
+          Z.bootOffEnBox = en2 ? en2.checked : null;
+          if (en2){ en2.checked = true; en2.dispatchEvent(new Event('change')); }
+          window.__pump(20, 40);
+          Z.bootOnDisplay = cv2 ? (cv2.style.display || 'block') : 'none';
+          Z.bootOnBodyBg = body.style.background || '';
+          var b6 = window.__arcHist.length;
+          window.__pump(20, 40);
+          Z.bootOnFrames = window.__arcHist.length - b6;
+          Z.bootOnArcs = window.__arcHist.slice(-2);
+          Z.endLsEnabled = (localStorage.getItem('whale-pond-settings-v1') || '').indexOf('"enabled":true') >= 0;
+        } catch (e) { Z.err = 'CAUGHT ' + (e && e.stack ? e.stack : e); }
+        out.frameErrors = window.__log.slice(0, 4);
+        emit9();
+      };
+
     }, 60);
   })();
 </script>
