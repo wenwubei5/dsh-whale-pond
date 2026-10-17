@@ -21,20 +21,43 @@ DSH（DeepSeek Harness）的 Web 界面背后本来是一块不透明背景。�
 ## 安装
 
 前提：**DSH Desktop**。插件用的是 DSH 的客户端插件机制（`window.__ModuleLoader__`），
-不是普通网页脚本，扔进浏览器里没用。
+不是普通网页脚本，扔进浏览器里没用。仓库里已经带了生成好的 `lib/client.js`，
+**装的时候不需要 Node、不需要 Python、不需要构建**。
+
+### 方式 A：一条命令从 GitHub 直装（推荐）
 
 ```bash
-# 1) 先确认活动 profile —— 文件里 "active" 那一项就是（常见 desktop / web）
+# 1) 先确认活动 profile —— 这个文件里 "active" 那一项就是（常见 desktop / web）
 cat "$APPDATA/DSH Desktop/profile-selection"
 
-# 2) 用桌面端自带的 CLI 装（dsh 一般不在 PATH 里）
+# 2) 用桌面端自带的 CLI，把 GitHub 上的包直接装进 profile（dsh 一般不在 PATH 里）
 DSH="/c/Program Files/DSH Desktop"        # 换成你自己的安装目录
 ELECTRON_RUN_AS_NODE=1 DSH_HOME="$HOME/.dsh" "$DSH/DSH Desktop.exe" \
   --expose-internals "$DSH/resources/app/lib/desktop-cli.js" \
-  plugin --profile desktop add "$(pwd)"
+  plugin --profile desktop add "github:wenwubei5/dsh-whale-pond"
 ```
 
+`plugin add` 后面的参数是**原样转给 pnpm** 的，所以三种写法都行：
+
+| 写法 | 例子 | 说明 |
+| --- | --- | --- |
+| GitHub 简写 | `github:wenwubei5/dsh-whale-pond` | 装当前 main 的最新提交 |
+| git URL | `git+https://github.com/wenwubei5/dsh-whale-pond.git` | 同上，可加 `#v1.0.0` 钉版本 |
+| 本地目录 | `"D:/code/dsh-whale-pond"` | 装成 `link:`，改源码刷新即生效 |
+
+### 方式 B：先 clone 再装（想改源码用这个）
+
+```bash
+git clone https://github.com/wenwubei5/dsh-whale-pond.git "D:/code/dsh-whale-pond"
+# 然后照上面第 2 步，最后一段换成：
+#   plugin --profile desktop add "D:/code/dsh-whale-pond"
+```
+
+改完 `src/whale_pond.html` 或 `src/whale_panel.js` 后跑 `python build/build.py` 重新生成
+`lib/client.js`（只要 Python 3 + 标准库，没有第三方依赖）。
+
 **新增插件包必须重启一次 DSH**（客户端入口要重新扫描）。之后再改代码就只要刷新页面（Ctrl+R）。
+从 GitHub 装的是**中性默认词**版本；你自己的词库存在 `localStorage`，不受影响。
 
 卸载：把上面的 `add` 换成 `remove`。
 
