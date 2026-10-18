@@ -531,6 +531,268 @@ CUSTOM_PREAMBLE = CUSTOM_PREAMBLE.replace(
   "DPR = perfDPR();")
 ranges[39] = (48, CUSTOM_PREAMBLE)
 
+# ---- 看海模式（2026-10-18）：全屏屏保 / 摸鱼小窗 ----
+VIEW_SRC = r'''
+// ---- 看海模式（2026-10-18）：全屏屏保 / 摸鱼小窗 / 回到壁纸 ----
+// VIEW 只在本次会话里有效、不写 localStorage：刷新永远回壁纸，免得一刷新就被锁在屏保里。
+// 层叠：wall(-1) < mini(2147482990) < 齿轮(2147483000) < 面板(2147483001) < full(2147483002) < 提示条(2147483003)
+var VIEW = 'wall';
+var mini = null, gripEl = null, hintEl = null, hintT = 0;
+var drag = null, noClick = false;
+var HINT_FULL = '点击画面或按 Esc 退出';
+var HINT_MINI = '拖动移动 · 右下角缩放 · 点击画面或按 Esc 退出';
+function viewClampX(x, w){ var vw = window.innerWidth || 1200; return Math.max(90 - w, Math.min(vw - 90, x)); }
+function viewClampY(y, h){ var vh = window.innerHeight || 800; return Math.max(4, Math.min(Math.max(4, vh - h - 4), y)); }
+function miniInit(){
+  var vw = window.innerWidth || 1200, vh = window.innerHeight || 800;
+  var w = Math.max(280, Math.min(560, Math.round(vw * 0.36)));
+  var h = Math.max(180, Math.min(Math.round(w * 0.62), Math.max(180, vh - 120)));
+  mini = { x: vw - w - 28, y: vh - h - 28, w: w, h: h };
+  if(mini.y < 56) mini.y = 56;
+  mini.x = viewClampX(mini.x, mini.w);
+  mini.y = viewClampY(mini.y, mini.h);
+}
+function hintEnsure(){
+  if(hintEl || !document.body) return;
+  hintEl = document.createElement('div');
+  hintEl.id = HINT_ID;
+  document.body.appendChild(hintEl);
+}
+function hintPlace(){
+  if(!hintEl) return;
+  if(VIEW === 'mini' && mini){
+    var cx = Math.round(mini.x + mini.w / 2);
+    var vw = window.innerWidth || 1200;
+    hintEl.style.left = Math.max(150, Math.min(vw - 150, cx)) + 'px';
+    var below = Math.round(mini.y + mini.h + 10);
+    // 小窗贴到屏幕底部时，提示条改挂到小窗上方，否则会被视口切掉
+    hintEl.style.top = (below > (window.innerHeight || 800) - 34 ? Math.max(6, Math.round(mini.y) - 36) : below) + 'px';
+    hintEl.style.bottom = 'auto';
+  } else {
+    hintEl.style.left = '50%';
+    hintEl.style.top = 'auto';
+    hintEl.style.bottom = '32px';
+  }
+}
+function showHint(txt){
+  hintEnsure();
+  if(!hintEl) return;
+  hintEl.textContent = txt;
+  hintPlace();
+  hintEl.style.opacity = '1';
+  if(hintT) clearTimeout(hintT);
+  hintT = setTimeout(function(){ if(hintEl) hintEl.style.opacity = '0'; hintT = 0; }, 5200);
+}
+function hideHint(){
+  if(hintT){ clearTimeout(hintT); hintT = 0; }
+  if(hintEl) hintEl.style.opacity = '0';
+}
+function gripEnsure(){
+  if(gripEl || !document.body) return;
+  gripEl = document.createElement('div');
+  gripEl.id = GRIP_ID;
+  gripEl.title = '拖动缩放';
+  gripEl.addEventListener('mousedown', function(e){ e.preventDefault(); e.stopPropagation(); dragStart('size', e); });
+  document.body.appendChild(gripEl);
+}
+function gripPlace(){
+  if(!gripEl) return;
+  if(VIEW !== 'mini' || !mini){ gripEl.style.display = 'none'; return; }
+  gripEl.style.display = 'block';
+  gripEl.style.left = Math.round(mini.x + mini.w - 22) + 'px';
+  gripEl.style.top = Math.round(mini.y + mini.h - 22) + 'px';
+}
+function applyViewStyle(){
+  if(VIEW === 'mini'){
+    if(!mini) miniInit();
+    cv.style.zIndex = '2147482990';
+    cv.style.pointerEvents = 'auto';
+    cv.style.left = Math.round(mini.x) + 'px';
+    cv.style.top = Math.round(mini.y) + 'px';
+    cv.style.width = Math.round(mini.w) + 'px';
+    cv.style.height = Math.round(mini.h) + 'px';
+    cv.style.borderRadius = '13px';
+    cv.style.border = '1px solid rgba(255,168,96,.42)';
+    cv.style.boxShadow = '0 18px 46px rgba(0,0,0,.55)';
+    cv.style.cursor = 'move';
+  } else if(VIEW === 'full'){
+    cv.style.zIndex = '2147483002';
+    cv.style.pointerEvents = 'auto';
+    cv.style.left = '0';
+    cv.style.top = '0';
+    cv.style.width = '100vw';
+    cv.style.height = '100vh';
+    cv.style.borderRadius = '0';
+    cv.style.border = '0';
+    cv.style.boxShadow = 'none';
+    cv.style.cursor = 'pointer';
+  } else {
+    cv.style.zIndex = '-1';
+    cv.style.pointerEvents = 'none';
+    cv.style.left = '0';
+    cv.style.top = '0';
+    cv.style.width = '100vw';
+    cv.style.height = '100vh';
+    cv.style.borderRadius = '0';
+    cv.style.border = '0';
+    cv.style.boxShadow = 'none';
+    cv.style.cursor = '';
+  }
+  gripPlace();
+  hintPlace();
+}
+function rebaseMotes(ow, oh){
+  if(!ow || !oh || !motes.length) return;
+  var sx = W / ow, sy = H / oh;
+  for(var i = 0; i < motes.length; i++){
+    var m = motes[i];
+    m.x = m.x * sx; m.y = m.y * sy;
+    if(m.x < -28) m.x = W + 28; else if(m.x > W + 28) m.x = -28;
+    if(m.y < -28) m.y = H + 28; else if(m.y > H + 28) m.y = -28;
+  }
+}
+function setView(mode){
+  if(!alive) return;
+  if(mode !== 'mini' && mode !== 'full') mode = 'wall';
+  if(mode !== 'wall' && !S.enabled) return;
+  var ow = W || window.innerWidth, oh = H || window.innerHeight;
+  VIEW = mode;
+  if(mode === 'mini' && !mini) miniInit();
+  if(mode !== 'wall'){ gripEnsure(); hintEnsure(); }
+  applyViewStyle();
+  resize();
+  rebaseMotes(ow, oh);
+  lamp.on = false; lamp.vx = 0; lamp.vy = 0;
+  if(VIEW === 'wall'){
+    if(S.enabled && HOOKS.tokens && HOOKS.tokens.apply) HOOKS.tokens.apply();
+    hideHint();
+  } else {
+    if(HOOKS.tokens && HOOKS.tokens.reset) HOOKS.tokens.reset();
+    showHint(VIEW === 'full' ? HINT_FULL : HINT_MINI);
+  }
+  if(HOOKS.refreshView) HOOKS.refreshView();
+}
+function dragStart(kind, e){
+  if(VIEW !== 'mini' || !mini) return;
+  drag = { kind: kind, sx: e.clientX, sy: e.clientY, ox: mini.x, oy: mini.y, ow: mini.w, oh: mini.h, moved: false };
+  window.addEventListener('mousemove', dragMove, true);
+  window.addEventListener('mouseup', dragEnd, true);
+}
+function dragMove(e){
+  if(!drag || !mini) return;
+  var dx = e.clientX - drag.sx, dy = e.clientY - drag.sy;
+  if(!drag.moved){
+    if(dx * dx + dy * dy < 25) return;
+    drag.moved = true;
+  }
+  if(drag.kind === 'move'){
+    mini.x = viewClampX(drag.ox + dx, mini.w);
+    mini.y = viewClampY(drag.oy + dy, mini.h);
+    applyViewStyle();
+  } else {
+    var vw = window.innerWidth || 1200, vh = window.innerHeight || 800;
+    mini.w = Math.max(280, Math.min(vw - 40, Math.round(drag.ow + dx)));
+    mini.h = Math.max(180, Math.min(vh - 40, Math.round(drag.oh + dy)));
+    mini.x = viewClampX(mini.x, mini.w);
+    mini.y = viewClampY(mini.y, mini.h);
+    applyViewStyle();
+    resize();
+  }
+}
+function dragEnd(){
+  if(!drag) return;
+  noClick = drag.moved;
+  drag = null;
+  window.removeEventListener('mousemove', dragMove, true);
+  window.removeEventListener('mouseup', dragEnd, true);
+  if(noClick) setTimeout(function(){ noClick = false; }, 260);
+}
+function onCvDown(e){
+  if(VIEW === 'wall' || VIEW === 'full') return;
+  if(e.button !== 0) return;
+  e.preventDefault();
+  dragStart('move', e);
+}
+function onCvClick(e){
+  if(VIEW === 'wall') return;
+  var skip = noClick;
+  noClick = false;
+  e.preventDefault(); e.stopPropagation();
+  if(skip) return;
+  setView('wall');
+}
+function onCvWheel(e){ if(VIEW !== 'wall'){ e.preventDefault(); } }
+function onWinResize(){
+  if(drag) return;
+  if(VIEW === 'mini' && mini){
+    mini.w = Math.max(280, Math.min(mini.w, Math.max(280, window.innerWidth - 40)));
+    mini.h = Math.max(180, Math.min(mini.h, Math.max(180, window.innerHeight - 40)));
+    mini.x = viewClampX(mini.x, mini.w);
+    mini.y = viewClampY(mini.y, mini.h);
+    applyViewStyle();
+  }
+  resize();
+  gripPlace();
+  hintPlace();
+}
+cv.addEventListener('mousedown', onCvDown);
+cv.addEventListener('click', onCvClick);
+cv.addEventListener('wheel', onCvWheel, { passive: false });
+window.addEventListener('resize', onWinResize);
+HOOKS.getMode = function(){ return VIEW; };
+HOOKS.setMode = setView;
+'''
+VIEW_JS = _blk(VIEW_SRC.strip(NL).split(NL))
+
+# 1) resize() 按模式取尺寸（小窗用 mini.w/h，其余取视口）
+old_resize = I3 + "  W = window.innerWidth; H = window.innerHeight;" + NL
+new_resize = (I3 + "  if(VIEW === 'mini' && mini){ W = Math.max(220, Math.round(mini.w)); H = Math.max(150, Math.round(mini.h)); }" + NL +
+I3 + "  else { W = window.innerWidth; H = window.innerHeight; }" + NL)
+assert CUSTOM_PREAMBLE.count(old_resize) == 1, 'resize anchor'
+CUSTOM_PREAMBLE = CUSTOM_PREAMBLE.replace(old_resize, new_resize)
+ranges[39] = (48, CUSTOM_PREAMBLE)
+
+# 2) 小窗里鼠标坐标要减掉小窗偏移，否则提灯/光环位置整体偏
+old_nx = "  var nx = e.clientX, ny = e.clientY;"
+new_nx = "  var nx = e.clientX - (VIEW === 'mini' ? mini.x : 0), ny = e.clientY - (VIEW === 'mini' ? mini.y : 0);"
+assert MOUSE.count(old_nx) == 1, 'mouse anchor'
+MOUSE = MOUSE.replace(old_nx, new_nx)
+ranges[427] = (438, MOUSE)
+
+# 3) VIEW_JS 插进 TAIL（赶在 var running = false; 之前）
+assert TAIL.count(I3 + "var running = false;" + NL) == 1, 'tail anchor'
+TAIL = TAIL.replace(I3 + "var running = false;" + NL, VIEW_JS + NL + I3 + "var running = false;" + NL)
+
+# 4) 停用时自动回壁纸，别停在一张卡住的全屏画布上
+old_en = I3 + "  if(want) run(); else halt();" + NL
+new_en = I3 + "  if(want) run(); else { if(VIEW !== 'wall') setView('wall'); halt(); }" + NL
+assert TAIL.count(old_en) == 1, 'setEnabled anchor'
+TAIL = TAIL.replace(old_en, new_en)
+
+# 5) stop() 里拆掉看海模式的监听与小窗元素
+old_stop = I3 + "  window.removeEventListener('mouseleave', onLeave);" + NL
+new_stop = (I3 + "  window.removeEventListener('mouseleave', onLeave);" + NL +
+I3 + "  window.removeEventListener('resize', onWinResize);" + NL +
+I3 + "  cv.removeEventListener('mousedown', onCvDown);" + NL +
+I3 + "  cv.removeEventListener('click', onCvClick);" + NL +
+I3 + "  cv.removeEventListener('wheel', onCvWheel);" + NL +
+I3 + "  window.removeEventListener('mousemove', dragMove, true);" + NL +
+I3 + "  window.removeEventListener('mouseup', dragEnd, true);" + NL +
+I3 + "  if(hintT) clearTimeout(hintT);" + NL +
+I3 + "  if(gripEl && gripEl.parentNode) gripEl.parentNode.removeChild(gripEl);" + NL +
+I3 + "  if(hintEl && hintEl.parentNode) hintEl.parentNode.removeChild(hintEl);" + NL +
+I3 + "  gripEl = null; hintEl = null;" + NL)
+assert TAIL.count(old_stop) == 1, 'stop anchor'
+TAIL = TAIL.replace(old_stop, new_stop)
+
+# 6) 看海模式开着时界面必须保持不透明：玻璃化要撤，主题切换也别再贴回来
+old_tok = T + T + '      var t = el();' + NL + T + T + '      clear();' + NL
+new_tok = (T + T + '      var t = el();' + NL +
+T + T + '      if(typeof HOOKS !== "undefined" && HOOKS.getMode && HOOKS.getMode() !== "wall"){ clear(); return; }' + NL +
+T + T + '      clear();' + NL)
+assert HEADER.count(old_tok) == 1, 'token guard anchor'
+HEADER = HEADER.replace(old_tok, new_tok)
+
 art = []
 n = 39
 while n <= 465:
@@ -573,7 +835,7 @@ io.open(OUT + '/cordis.patch.yml', 'w', encoding='utf-8', newline=NL).write(NL.j
 
 pkg = {
   "name": "dsh-whale-pond",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "小鲸鱼壁纸：把鲸鱼的自留地铺在 DSH Web 界面背后（纯视觉背景插件，不拦鼠标不抢键盘）",
   "type": "module",
   "main": "lib/index.js",

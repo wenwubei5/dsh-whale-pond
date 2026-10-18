@@ -6,6 +6,8 @@
 		var PANEL_ID = "whale-pond-panel";
 		var GEAR_ID = "whale-pond-gear";
 		var POWER_ID = "whale-pond-power";   // 一键停用/恢复（2026-10-17：要能真的停掉）
+		var GRIP_ID = "whale-pond-grip";     // 小窗右下角的缩放手柄（2026-10-18）
+		var HINT_ID = "whale-pond-hint";     // 「点击画面或按 Esc 退出」提示条
 		var S_KEY = "whale-pond-settings-v1";
 		var W_KEY = "whale-pond-words-v1";   // 词库单独存：整份设置回写/恢复默认都动不到它
 		var HOOKS = {};                 // start() 内部回填：tokens / canvas / respawn
@@ -186,11 +188,22 @@
 			"#" + PANEL_ID + " .wp-foot{display:flex;gap:8px;margin-top:15px}",
 			"#" + PANEL_ID + " .wp-btn{flex:1;text-align:center;padding:6px 0;border-radius:7px;cursor:pointer;",
 			"border:1px solid rgba(255,168,96,.28);color:#ffc484;background:rgba(255,168,96,.06)}",
-			"#" + PANEL_ID + " .wp-btn:hover{background:rgba(255,168,96,.16)}"
+			"#" + PANEL_ID + " .wp-btn:hover{background:rgba(255,168,96,.16)}",
+			"#" + PANEL_ID + " .wp-btn.wp-on{background:rgba(255,168,96,.22);border-color:rgba(255,168,96,.7);color:#ffe0b8}",
+			"#" + GRIP_ID + "{position:fixed;width:22px;height:22px;z-index:2147482991;display:none;cursor:nwse-resize;",
+			"border-radius:0 0 12px 0;background:linear-gradient(135deg,transparent 0 44%,rgba(255,176,102,.55) 44% 51%,transparent 51% 61%,rgba(255,176,102,.34) 61% 68%,transparent 68%)}",
+			"#" + HINT_ID + "{position:fixed;left:50%;bottom:32px;transform:translateX(-50%);z-index:2147483003;pointer-events:none;",
+			"background:rgba(4,10,17,.66);border:1px solid rgba(255,168,96,.26);color:rgba(255,214,170,.92);border-radius:999px;",
+			"padding:7px 16px;font:12px/1.4 -apple-system,'Segoe UI',system-ui,sans-serif;letter-spacing:.05em;opacity:0;",
+			"transition:opacity .45s;backdrop-filter:blur(6px)}"
 		].join(NL);
 		var CTL = [
 			["g", "开关"],
 			["c", "enabled", "启用壁纸", "关掉 = 真停：动画停、玻璃背景撤掉、界面回到原样（齿轮和这个面板还在）。也可以直接点右上角那个 ■"],
+			["g", "看海"],
+			["b", "viewFull", "全屏屏保", "整片海铺满屏幕、盖住界面文字，专心看鲸鱼吃光点。点击画面或按 Esc 退出"],
+			["b", "viewMini", "小窗摸鱼", "一个可以拖动、右下角能缩放的小窗，浮在界面上。点击画面或按 Esc 退出"],
+			["b", "viewWall", "回到壁纸", "恢复成界面背后那片半透明的海"],
 			["g", "界面"],
 			["r", "glass", "面板不透明度", 0.15, 0.75, 0.01, "越小，海越明显"],
 			["r", "brightness", "画布亮度", 1.0, 2.2, 0.05, ""],
@@ -221,7 +234,7 @@
 			["g", "词库（鲸鱼吃的词）"],
 			["w", "words", "词库", "一行一个词，逗号 / 顿号也行；最多 200 个、每个 24 字。改一下存一下，刷新也不会丢。清空 = 回到内建那 10 个词；下面的「恢复默认」不会动词库"]
 		];
-		var panelEl = null, gearEl = null, powerEl = null, valRefs = [];
+		var panelEl = null, gearEl = null, powerEl = null, valRefs = [], viewBtns = [];
 		function mkEl(tag, css, txt){
 			var d = document.createElement(tag);
 			if(css) d.style.cssText = css;
@@ -242,6 +255,7 @@
 			}
 			refreshWords();
 			refreshGear();
+			refreshView();
 		}
 		var perfTimer = 0, perfEl = null;
 		var qTimer = 0;
@@ -273,6 +287,15 @@
 				gearEl.style.opacity = S.enabled ? "" : "0.3";
 			}
 		}
+		// 「看海」按钮的当前模式高亮（2026-10-18）。模式本身在 start() 里，
+		// 面板只通过 HOOKS.getMode / HOOKS.setMode 与它说话。
+		function viewKeyOf(m){ return m === "full" ? "viewFull" : (m === "mini" ? "viewMini" : "viewWall"); }
+		function refreshView(){
+			var m = HOOKS.getMode ? HOOKS.getMode() : "wall";
+			var cur = viewKeyOf(m);
+			for(var i = 0; i < viewBtns.length; i++) viewBtns[i].el.className = "wp-btn" + (viewBtns[i].key === cur ? " wp-on" : "");
+		}
+		HOOKS.refreshView = refreshView;
 		function syncLive(key){
 			if(key === undefined || key === "enabled"){
 				if(HOOKS.setEnabled) HOOKS.setEnabled(!!S.enabled);
@@ -294,6 +317,14 @@
 		}
 		function onKey(e){
 			if(e.key !== "Escape") return;
+			// 屏保/小窗优先：Esc 先退出看海模式（这一步同样要吃掉事件，否则宿主也会取消生成）
+			var vmode = HOOKS.getMode ? HOOKS.getMode() : "wall";
+			if(vmode !== "wall"){
+				e.preventDefault(); e.stopPropagation();
+				if(HOOKS.setMode) HOOKS.setMode("wall");
+				togglePanel(false);
+				return;
+			}
 			var open = !!(panelEl && panelEl.style.display === "block");
 			// 面板开着时必须吃掉这次 Escape。宿主（React 根容器在 body 里）比 document
 			// 的冒泡监听更早拿到事件，事后 stopPropagation 救不回来 —— DSH 里 Escape 是
@@ -362,6 +393,18 @@
 					var cnt = mkEl("div", "font-size:11px;color:#ffc484;margin-top:2px", "");
 					row.appendChild(cnt);
 					valRefs.push({ key: key, ta: ta, cnt: cnt, range: null, box: null, out: null });
+				} else if(c[0] === "b"){
+					// 「看海」整行按钮：点完立刻切模式，并把面板收起来（全屏时面板本来就被盖住）
+					var vb = mkEl("div", "", c[2]);
+					vb.className = "wp-btn";
+					vb.style.margin = "5px 0 0";
+					vb.addEventListener("click", (function(k){ return function(){
+						if(HOOKS.setMode) HOOKS.setMode(k === "viewFull" ? "full" : (k === "viewMini" ? "mini" : "wall"));
+						togglePanel(false);
+					}; })(key));
+					row.appendChild(vb);
+					if(c[3]) row.appendChild(mkEl("div", "font-size:11px;color:#7d94a8;margin-top:3px", c[3]));
+					viewBtns.push({ key: key, el: vb });
 				} else if(c[0] === "s"){
 					row.appendChild(mkEl("div", "color:#d8e8f5;margin-bottom:4px", c[2]));
 					var sel = document.createElement("select");
@@ -431,5 +474,5 @@
 			if(powerEl && powerEl.parentNode) powerEl.parentNode.removeChild(powerEl);
 			if(perfTimer){ clearInterval(perfTimer); perfTimer = 0; }
 			if(qTimer){ clearTimeout(qTimer); qTimer = 0; }
-			panelEl = null; gearEl = null; powerEl = null; perfEl = null; valRefs = [];
+			panelEl = null; gearEl = null; powerEl = null; perfEl = null; valRefs = []; viewBtns = [];
 		}

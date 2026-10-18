@@ -17,8 +17,9 @@ DSH（DeepSeek Harness）的 Web 界面背后本来是一块不透明背景。�
 - 默认 **400 颗光点**在海里飘（可拉到 2100），鲸鱼游过去把它们吃掉，头上飘一行 `-1 token`
 - 鼠标是一盏**提灯**，带着洋流把光点往鲸鱼嘴边赶
 - 右下角有个**发射区**：鼠标进圈，圈里的光点和鲸鱼一起被甩出去（最远约 4 倍圈直径）
-- 右上角齿轮 ⚙ 是**控制台**：12 个滑杆 + 7 个开关 + 1 个下拉 + 1 个词库框，改完立刻变
+- 右上角齿轮 ⚙ 是**控制台**：12 个滑杆 + 7 个开关 + 1 个下拉 + 1 个词库框 + 5 个按钮，改完立刻变
 - 齿轮左边还有一个 **■ / ▶ 一键停用**：动画停、玻璃撤掉、界面回到原样，设置会记住
+- **看海模式**：一键全屏屏保（盖住界面文字，专心看鲸鱼吃光点），或弹出的可拖动 / 可缩放小窗（浮在界面上摸鱼）；点画面或按 Esc 退出
 - **五种运动方式**（漂移 / 飘落 / 上浮 / 洋流 / 漩涡）+ **呼吸灯**，和鼠标吸引、发射台叠加生效
 - 深浅色主题自动跟随；`prefers-reduced-motion` 时跑 120 帧后定格；页面隐藏时暂停
 
@@ -67,7 +68,7 @@ git clone https://github.com/wenwubei5/dsh-whale-pond.git "D:/code/dsh-whale-pon
 
 ### 方式 C：下载 zip（离线 / 机器上没有 git）
 
-到 [Releases](https://github.com/wenwubei5/dsh-whale-pond/releases/latest) 下载 `dsh-whale-pond-1.1.0.zip`
+到 [Releases](https://github.com/wenwubei5/dsh-whale-pond/releases/latest) 下载 `dsh-whale-pond-1.2.0.zip`
 （约 50 KB，里面是 `package.json` + `lib/` + `cordis.patch.yml` + `README.md` + `LICENSE`），
 解压出 `dsh-whale-pond/`，再把上面的命令最后一段换成那个目录：
 
@@ -75,7 +76,7 @@ git clone https://github.com/wenwubei5/dsh-whale-pond.git "D:/code/dsh-whale-pon
 ... plugin --profile desktop add "D:/下载/dsh-whale-pond"
 ```
 
-zip 里的 `lib/client.js` 就是生成好的产物（47,669 B），解压即可用，不需要构建。
+zip 里的 `lib/client.js` 就是生成好的产物（59,680 B），解压即可用，不需要构建。
 
 卸载：把上面的 `add` 换成 `remove`。
 
@@ -108,6 +109,7 @@ ELECTRON_RUN_AS_NODE=1 DSH_HOME="$HOME/.dsh" "$DSH/DSH Desktop.exe" \
 | 分组 | 控件 | 默认 |
 | --- | --- | --- |
 | 开关 | 启用壁纸 ☑（和右上角 ■ / ▶ 等价） | 开 |
+| 看海 | 全屏屏保 · 小窗摸鱼 · 回到壁纸（三个按钮，当前生效那个亮橙） | 壁纸模式 |
 | 界面 | 面板不透明度 · 画布亮度 | 0.34 · 1.6 |
 | 海 | 光点数量 · 光点速度 | 400 · 1.0 |
 | 鼠标（提灯） | 洋流吸引光点 ☑ · 吸引半径 · 吸引强度 · 显示吸引范围光环 ☑ | 340px · 1.0 |
@@ -132,6 +134,31 @@ ELECTRON_RUN_AS_NODE=1 DSH_HOME="$HOME/.dsh" "$DSH/DSH Desktop.exe" \
 恢复时按 `tokens.apply()` → `run()` → 补齐光点数 的顺序来，不会出现「海回来了但界面还是实心」的中间态。
 真页面实测：停用前 1.2 秒画 28,263 个弧，停用后同一窗口 **0** 个；禁缓存重载后仍 `display:none` / 0 弧，勾回来立刻恢复到 27,287 个弧。
 
+## 看海：全屏屏保 · 小窗摸鱼
+
+控制台最上面「看海」组里三个按钮（别和齿轮左边那个 ■ / ▶ 停用混起来）：
+
+- **全屏屏保** —— 整片海铺满窗口，把界面文字全盖住，鲸鱼和光点在整屏里游。底部会浮出一条
+  「点击画面或按 Esc 退出」的胶囊提示，5 秒后自己淡出。副屏上放着纯看很合适。
+- **小窗摸鱼** —— 一个约 280×180 的圆角小海窗浮在右下角，界面照常能点能用；拖窗内任意处移动，
+  拖右下角手柄缩放（280×180 ~ 560×347）。窗口一直被夹在视口里，不会拖丢。
+- **回到壁纸** —— 回到正常的「铺满整个界面背后」模式。
+
+三种模式互斥，当前生效的按钮亮橙色。这个**模式本身不记忆**：刷新页面就回到壁纸模式
+（「启用壁纸」那个停用开关倒是会记住）。
+
+实现上三件事值得说：
+
+- 看海时画布**离开 `z-index:-1`**：小窗 `2147482990`、全屏 `2147483002`（压在界面上，也压住自己的齿轮和面板），
+  提示条 `2147483003`。回壁纸再回到 `-1` 并恢复 `pointer-events:none`。
+- 进看海先把玻璃背景**整份撤掉**（`tokens.reset()`），否则小窗后面还是透的、看不清；回壁纸且没停用时再 `tokens.apply()`。
+- 画布尺寸一变就按比例**重排光点**（`rebaseMotes`：坐标等比缩放 + 绕屏回绕），不会有光点被甩到画布外；
+  小窗里鼠标坐标要减去窗口偏移，提灯才会指哪儿亮哪儿。
+
+真页面实测（754×440 视口）：全屏 canvas `rect [0,0,754,440]`、`z-index 2147483002`、界面 token 全空（玻璃撤净）；
+小窗 `z-index 2147482990`、拖动 -60/+40 跟手、缩放 280×180 → 360×240、手柄跟着走；Esc 退出后宿主收到的 Escape 次数 **0**
+（不会顺手取消掉你正在生成的回答）；停用壁纸时若正在看海，会自动回到壁纸并 `display:none`。
+
 ## 实现要点（这些坑都踩过）
 
 - **canvas 要 `z-index:-1`，但光这样是看不见的**：body 自己的不透明背景画在负 z-index 后代之上，
@@ -145,6 +172,8 @@ ELECTRON_RUN_AS_NODE=1 DSH_HOME="$HOME/.dsh" "$DSH/DSH Desktop.exe" \
 - **发射出去的光点要免疫鼠标吸引**（`if(lamp.on && !(m.lz>0))`），否则会被鼠标自己拽回来、飞不远。
 - **帧门 `if(dt < 24) return;` + `document.hidden` 暂停 + DPR ≤ 1.5 + 32fps 上限**，4K 屏也稳。
 - **停用要做成「可逆的拆除」**：rAF 只留一个入口（`run()`），停时 `cancelAnimationFrame` 并把 `running` 置假；画布 `display:none` 比停止绘制更彻底（连合成都不做）；玻璃背景必须 `tokens.reset()` 逐个 `removeProperty`，只覆盖不撤会永远留着半透明。
+- **看海时的 Esc 必须拦在捕获阶段**：面板的 keydown 监听挂在 `document` 捕获阶段（第三参 `true`），看海模式下 `preventDefault + stopPropagation` 再退出，宿主收不到这次 Esc（DSH 里 Esc = 取消生成）；面板关着时不能拦，得让它照常穿透。
+- **小窗要整只夹在视口里**（`Math.max(4, Math.min(vh - h - 4, y))`），提示条贴底时改挂到小窗上方，否则固定挂在下方会被视口切掉、截图里根本看不见。
 
 ## 改它
 
@@ -154,7 +183,7 @@ src/whale_panel.js    # 控制台（面板）源码
 build/build.py        # 生成器：按行号剪裁 src/whale_pond.html + 注入补丁 → lib/client.js
 lib/client.js         # 生成产物（已提交，装完即用，不需要构建工具）
 test/harness.html     # 离线夹具：假 __ModuleLoader__ + 手动 rAF 泵，无头浏览器 3 秒跑完
-test/probes/*.js      # 真页面 CDP 探针（停用开关 / 运动方式 / 控制台 / 词库 / 发射区 / 越界值 / 全控件扫描）
+test/probes/*.js      # 真页面 CDP 探针（看海模式 / 停用开关 / 运动方式 / 控制台 / 词库 / 发射区 / 越界值 / 全控件扫描）
 ```
 
 重建（会重写 `lib/client.js`、`cordis.patch.yml`、`package.json`）：
@@ -193,6 +222,7 @@ drawn on a fixed `z-index:-1` canvas behind the web UI, while the UI's own backg
 made translucent so the sea shows through. The mouse acts as a lamp that herds motes toward the
 whale; a launch pad in the bottom-right corner blasts motes and the whale away; a gear panel
 exposes 20 live controls (count, speed, motion mode, breathing light, word list, render scale, …).
+A one-click full-screen screensaver or a draggable mini window lets you just watch the sea.
 No input is intercepted, nothing is fetched, there are no dependencies.
 
 Install: `dsh plugin --profile <profile-name> add <this folder>`, then restart DSH once.

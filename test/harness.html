@@ -248,7 +248,8 @@
       if (rs.length >= 9){ rs[1].value = 1.6; rs[1].dispatchEvent(new Event('input')); rs[0].value = 0.34; rs[0].dispatchEvent(new Event('input')); }
       var btns = panel ? panel.querySelectorAll('.wp-btn') : [];
       out.buttonCount = btns.length;
-      if (btns.length >= 1) btns[0].click();
+      var rbtn = null; for (var rb = 0; rb < btns.length; rb++) if ((btns[rb].textContent || '').indexOf('恢复默认') >= 0) rbtn = btns[rb];
+      if (rbtn) rbtn.click();
       window.__pump(4, 40);
       out.countLabelAfterReset = rs.length >= 9 ? rs[2].parentNode.children[0].children[1].textContent : '';
       try { out.savedAfterReset = (localStorage.getItem('whale-pond-settings-v1') || '').slice(0, 90); } catch(e){ out.savedAfterReset = 'LS_ERR ' + e; }
@@ -481,7 +482,8 @@
               // 「恢复默认」→ 词库回内建那 10 个
               var btns3 = pnl3.querySelectorAll('.wp-btn');
               W.btnCount = btns3.length;
-              btns3[0].click();
+              var rb3 = null; for (var r3 = 0; r3 < btns3.length; r3++) if ((btns3[r3].textContent || '').indexOf('恢复默认') >= 0) rb3 = btns3[r3];
+              if (rb3) rb3.click();
               W.afterResetText = ta3.value.split('\n').join('|');
               W.afterResetLabel = cntOf(ta3);
               try { W.afterResetWords = JSON.parse(localStorage.getItem('whale-pond-words-v1') || 'null'); } catch(e){ W.afterResetWords = 'ERR ' + e; }   // 恢复默认不动词库 → 仍是自定义那几个
@@ -557,8 +559,9 @@
           X.drawnBuiltin = drawn.filter(function (s) { return BUILTIN4.indexOf(s) >= 0; }).length;
           // 3)「恢复默认（词库保留）」真的不动词库
           var btns = p2.querySelectorAll('.wp-btn');
-          X.resetLabel = btns[0].textContent;
-          btns[0].click();
+          var rb4 = null; for (var r4 = 0; r4 < btns.length; r4++) if ((btns[r4].textContent || '').indexOf('恢复默认') >= 0) rb4 = btns[r4];
+          X.resetLabel = rb4 ? rb4.textContent : '';
+          if (rb4) rb4.click();
           X.afterResetWords = localStorage.getItem(WK);
           X.afterResetTa = taNow().value.split('\n').join('|');
           X.afterResetCount = cnt(taNow());
@@ -953,7 +956,124 @@
           Z.endLsEnabled = (localStorage.getItem('whale-pond-settings-v1') || '').indexOf('"enabled":true') >= 0;
         } catch (e) { Z.err = 'CAUGHT ' + (e && e.stack ? e.stack : e); }
         out.frameErrors = window.__log.slice(0, 4);
-        emit9();
+        if (window.__fuzz10) window.__fuzz10(emit9); else emit9();
+      };
+
+      // ============ fuzz 第十批：看海模式（全屏屏保 / 小窗摸鱼，2026-10-18） ============
+      window.__fuzz10 = function (emit10) {
+        var V = {}; out.view = V;
+        try {
+          if (typeof window.__cleanup18 === 'function') window.__cleanup18();
+          if (typeof window.__cleanup17 === 'function') window.__cleanup17();
+          window.__cleanup19 = fresh();
+          window.__pump(12, 40);
+          var gear = document.getElementById('whale-pond-gear');
+          var panel = document.getElementById('whale-pond-panel');
+          var cv = document.getElementById('whale-pond-canvas');
+          var body = document.body;
+          function openP(){ for (var g = 0; g < 6 && panel.style.display !== 'block'; g++) gear.click(); return panel.style.display; }
+          function btnOf(label){ var bs = panel.querySelectorAll('.wp-btn'); for (var i = 0; i < bs.length; i++) if ((bs[i].textContent || '') === label) return bs[i]; return null; }
+          function snap(){ return { z: cv.style.zIndex, pe: cv.style.pointerEvents, w: cv.style.width, h: cv.style.height, l: cv.style.left, t: cv.style.top, rad: cv.style.borderRadius, bg: body.style.background || '', tok: (body.style.getPropertyValue('--dsw-alias-bg-base') || '').slice(0, 24), disp: cv.style.display || 'block' }; }
+          function hintState(){ var h = document.getElementById('whale-pond-hint'); return h ? { txt: h.textContent, op: h.style.opacity, left: h.style.left, top: h.style.top } : null; }
+          function gripState(){ var g = document.getElementById('whale-pond-grip'); return g ? { disp: getComputedStyle(g).display, l: g.style.left, t: g.style.top } : null; }
+          function mev(t, x, y){ return new MouseEvent(t, { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0 }); }
+          function esc(){ document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); }
+          window.__hostEsc10 = 0;
+          window.addEventListener('keydown', function (e) { if (e.key === 'Escape') window.__hostEsc10++; });
+
+          V.base = snap();
+          V.hintInit = hintState();
+          V.gripInit = gripState();
+
+          // —— 1) 全屏屏保 ——
+          V.panelOpen = openP();
+          var bFull = btnOf('全屏屏保'), bMini = btnOf('小窗摸鱼'), bWall = btnOf('回到壁纸');
+          V.btns = [!!bFull, !!bMini, !!bWall];
+          if (bFull) bFull.click();
+          window.__pump(6, 40);
+          V.full = snap();
+          V.fullHint = hintState();
+          V.fullPanel = panel.style.display;
+          openP();
+          var onEl = btnOf('全屏屏保');
+          V.fullOnClass = onEl ? onEl.className : '';
+          V.fullOnCount = panel.querySelectorAll('.wp-btn.wp-on').length;
+          // 点击画面退出
+          cv.dispatchEvent(mev('mousedown', 420, 300)); cv.dispatchEvent(mev('mouseup', 420, 300)); cv.dispatchEvent(mev('click', 420, 300));
+          window.__pump(4, 40);
+          V.afterClickOut = snap();
+          V.hostEscClick = window.__hostEsc10;
+
+          // —— 2) 小窗摸鱼 ——
+          openP(); if (bMini) bMini.click();
+          window.__pump(6, 40);
+          V.mini = snap();
+          V.miniGrip = gripState();
+          V.miniHint = hintState();
+          var lx = parseInt(cv.style.left, 10), ly = parseInt(cv.style.top, 10);
+          V.miniBuf = [cv.width, cv.height];
+          // 拖动：位置跟手、模式不变
+          cv.dispatchEvent(mev('mousedown', lx + 40, ly + 40));
+          window.dispatchEvent(mev('mousemove', lx + 100, ly + 84));
+          window.__pump(2, 40);
+          V.dragMid = [parseInt(cv.style.left, 10), parseInt(cv.style.top, 10)];
+          window.dispatchEvent(mev('mouseup', lx + 100, ly + 84));
+          window.__pump(2, 40);
+          V.dragEnd = [parseInt(cv.style.left, 10), parseInt(cv.style.top, 10)];
+          V.dragZ = cv.style.zIndex;
+          // 拖完那一次点击不该被当成「退出」
+          cv.dispatchEvent(mev('click', lx + 100, ly + 84));
+          window.__pump(2, 40);
+          V.afterDragClickZ = cv.style.zIndex;
+          // 右下角手柄缩放
+          var gp = document.getElementById('whale-pond-grip');
+          var gl = parseInt(gp.style.left, 10), gt = parseInt(gp.style.top, 10);
+          V.gripBefore = [parseInt(cv.style.width, 10), parseInt(cv.style.height, 10)];
+          gp.dispatchEvent(mev('mousedown', gl + 8, gt + 8));
+          window.dispatchEvent(mev('mousemove', gl + 96, gt + 74));
+          window.__pump(2, 40);
+          window.dispatchEvent(mev('mouseup', gl + 96, gt + 74));
+          window.__pump(2, 40);
+          V.gripAfter = [parseInt(cv.style.width, 10), parseInt(cv.style.height, 10)];
+          // Esc 退出：宿主不该收到这次 Escape
+          esc();
+          window.__pump(4, 40);
+          V.escOut = snap();
+          V.hostEscAfterEsc = window.__hostEsc10;
+
+          // —— 3) 全屏时停用壁纸 → 应该自动回壁纸 ——
+          openP(); if (bFull) bFull.click();
+          window.__pump(4, 40);
+          V.offBefore = snap();
+          var boxes = panel.querySelectorAll('input[type=checkbox]'), enBox = null;
+          for (var i = 0; i < boxes.length; i++) { var lb = boxes[i].parentNode ? (boxes[i].parentNode.textContent || '') : ''; if (lb.indexOf('启用壁纸') >= 0) enBox = boxes[i]; }
+          V.enBoxFound = !!enBox;
+          if (enBox) { enBox.checked = false; enBox.dispatchEvent(new Event('change')); }
+          window.__pump(6, 40);
+          V.offSnap = snap();
+          if (enBox) { enBox.checked = true; enBox.dispatchEvent(new Event('change')); }
+          window.__pump(10, 40);
+          V.backOn = snap();
+
+          // —— 4) 切到小窗后，光点应该落在新的 W/H 范围内 ——
+          openP(); if (bMini) bMini.click();
+          window.__pump(14, 40);
+          window.__pts = []; window.__rec = true;
+          window.__pump(3, 40);
+          window.__rec = false;
+          var pts = window.__pts, mx = 0, my = 0;
+          for (var p = 0; p < pts.length; p++) { if (pts[p][0] > mx) mx = pts[p][0]; if (pts[p][1] > my) my = pts[p][1]; }
+          V.motesMax = [Math.round(mx), Math.round(my)];
+          V.miniWH = [parseInt(cv.style.width, 10), parseInt(cv.style.height, 10)];
+          V.moteCount = (function(){ var n = 0; return n; })();
+          esc();
+          window.__pump(6, 40);
+          V.final = snap();
+          V.hostEscFinal = window.__hostEsc10;
+          V.arcs = window.__arcHist.slice(-3);
+          V.errs = window.__log.slice(0, 3);
+        } catch (e) { V.err = 'CAUGHT ' + (e && e.stack ? e.stack : e); }
+        emit10();
       };
 
     }, 60);
